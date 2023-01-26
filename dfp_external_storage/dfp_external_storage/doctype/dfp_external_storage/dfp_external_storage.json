@@ -1,0 +1,142 @@
+{
+ "actions": [],
+ "autoname": "format:DFP-STORAGE-{bucket_name}-{YYMMDD}-{##}",
+ "creation": "2023-01-07 18:20:18.943179",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "title",
+  "type",
+  "html_1",
+  "endpoint",
+  "column_break_7",
+  "secure",
+  "bucket_name",
+  "region",
+  "access_key",
+  "secret_key",
+  "folders"
+ ],
+ "fields": [
+  {
+   "fieldname": "type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Type",
+   "options": "S3 Compatible",
+   "reqd": 1
+  },
+  {
+   "fieldname": "access_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Access Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "secret_key",
+   "fieldtype": "Password",
+   "label": "Secret Key",
+   "no_copy": 1,
+   "reqd": 1
+  },
+  {
+   "default": "auto",
+   "fieldname": "region",
+   "fieldtype": "Data",
+   "label": "Region",
+   "reqd": 1
+  },
+  {
+   "fieldname": "bucket_name",
+   "fieldtype": "Data",
+   "in_filter": 1,
+   "in_global_search": 1,
+   "in_list_view": 1,
+   "in_preview": 1,
+   "in_standard_filter": 1,
+   "label": "Bucket name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "html_1",
+   "fieldtype": "HTML",
+   "options": "<p>Used Minio library (Simple Storage Service or S3) client to perform bucket and object operations), so please refer to it class initialization for more info:</p>\n<ul>\n<li><strong>endpoint</strong>: Hostname of a S3 service.</li>\n<li><strong>access_key</strong>: Access key (aka user ID) of your account in S3 service.</li>\n<li><strong>secret_key</strong>: Secret Key (aka password) of your account in S3 service.</li>\n<li><strong>session_token</strong>: Session token of your account in S3 service.</li>\n<li><strong>secure</strong>: Flag to indicate to use secure (TLS) connection to S3 service or not.</li>\n</ul>"
+  },
+  {
+   "fieldname": "endpoint",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "host:port",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "secure",
+   "fieldtype": "Check",
+   "label": "\u00bfSecure?"
+  },
+  {
+   "fieldname": "column_break_7",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Home",
+   "description": "Select one or more folders. Select \"Home\" folder for ALL files within Frappe being synced with this remote file connection.",
+   "fieldname": "folders",
+   "fieldtype": "Table MultiSelect",
+   "label": "Folder(s)",
+   "options": "DFP External Storage by Folder"
+  },
+  {
+   "default": "0",
+   "description": "<ul>\n<li><strong>enabled</strong>: all files will be uploaded within selected folder(s) will be uploaded to remote storage.</li>\n<li><strong>disabled</strong>: If connection is valid will be used to get/download remote files but no new files will be uploaded.</li>\n</ul>\n",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Write enabled"
+  },
+  {
+   "description": "Choose your descriptive name",
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title or name",
+   "reqd": 1
+  }
+ ],
+ "links": [
+  {
+   "group": "Remote files using this connection",
+   "link_doctype": "File",
+   "link_fieldname": "dfp_external_storage"
+  }
+ ],
+ "modified": "2023-01-22 16:30:15.741031",
+ "modified_by": "Administrator",
+ "module": "DFP External Storage",
+ "name": "DFP External Storage",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "show_title_field_in_link": 1,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

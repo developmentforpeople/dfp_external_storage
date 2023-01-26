@@ -1,0 +1,27 @@
+
+.dfp-storage-external-icon {
+	color: cornflowerblue;
+}
+
+.file-wrapper {
+	.dfp-storage-external-icon {
+		position: absolute;
+		right: 5px;
+		bottom: 2px;
+		opacity: 0.7;
+	}
+}
+
+.title-area {
+	.dfp-storage-external-icon {
+		margin-right: 8px;
+		font-size: 1.1rem;
+	}
+}
+
+// Hide add button within "File" links
+[id="page-DFP External Storage"] {
+	button.btn-new[data-doctype="File"] {
+		display: none;
+	}
+}

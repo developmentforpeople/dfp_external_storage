@@ -1,0 +1,9 @@
+.DS_Store
+*.pyc
+*.egg-info
+*.swp
+tags
+dfp_external_storage/docs/current
+dfp_external_storage/public/dist
+node_modules/
+__pycache__/

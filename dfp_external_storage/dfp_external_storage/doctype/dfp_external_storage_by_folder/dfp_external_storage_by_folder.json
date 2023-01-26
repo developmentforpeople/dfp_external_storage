@@ -1,0 +1,31 @@
+{
+ "actions": [],
+ "creation": "2023-01-21 12:09:57.563323",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "folder"
+ ],
+ "fields": [
+  {
+   "fieldname": "folder",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Folder",
+   "options": "File",
+   "reqd": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2023-01-21 12:09:57.563323",
+ "modified_by": "Administrator",
+ "module": "DFP External Storage",
+ "name": "DFP External Storage by Folder",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

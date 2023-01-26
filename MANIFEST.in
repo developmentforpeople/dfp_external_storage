@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include dfp_external_storage *.css
+recursive-include dfp_external_storage *.csv
+recursive-include dfp_external_storage *.html
+recursive-include dfp_external_storage *.ico
+recursive-include dfp_external_storage *.js
+recursive-include dfp_external_storage *.json
+recursive-include dfp_external_storage *.md
+recursive-include dfp_external_storage *.png
+recursive-include dfp_external_storage *.py
+recursive-include dfp_external_storage *.svg
+recursive-include dfp_external_storage *.txt
+recursive-exclude dfp_external_storage *.pyc
