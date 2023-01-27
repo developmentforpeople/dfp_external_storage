@@ -1,6 +1,7 @@
 
 const class_external_storage_icon = 'dfp-storage-external-icon'
 
+
 function dfp_s3_icon(title='') {
 	let $icon = $(`<i class="fa fa-cloud-upload ${class_external_storage_icon}"></i>`)
 	if (title) {
@@ -8,6 +9,7 @@ function dfp_s3_icon(title='') {
 	}
 	return $icon
 }
+
 
 // Overrides for view FileView (Frappe file browser)
 frappe.views.FileView = class DFPExternalStorageFileView extends frappe.views.FileView {
@@ -67,39 +69,5 @@ frappe.ui.form.on('File', {
 frappe.listview_settings['File'] = {
 
 	add_fields: ['dfp_external_storage_s3_key'],
-
-	// onload: function (me) {
-	// 	console.log('File:list:onload ', me)
-	// },
-
-	// get_indicator: function(doc) {
-	// 	var colors = {
-	// 		'Remote file': 'green',
-	// 	}
-	// 	let status = null
-	// 	if (doc.dfp_external_storage_s3_key) {
-	// 		status = 'Remote file'
-	// 	}
-	// 	return status ? [__(status), colors[status]] : []
-	// },
-
-	// button: {
-	// 	// show: function (doc) {
-	// 	// 	return doc.reference_name;
-	// 	// },
-	// 	// get_label: function () {
-	// 	// 	return __("Open", null, "Access");
-	// 	// },
-	// 	// get_description: function (doc) {
-	// 	// 	return __("Open {0}", [`${__(doc.reference_type)}: ${doc.reference_name}`]);
-	// 	// },
-	// 	// action: function (doc) {
-	// 	// 	frappe.set_route("Form", doc.reference_type, doc.reference_name);
-	// 	// },
-	// },
-
-	// refresh: function (me) {
-	// 	console.log('File:list:refresh ', me)
-	// },
 
 }
