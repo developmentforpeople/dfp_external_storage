@@ -1,6 +1,6 @@
 # DFP External Storage
 
-S3 compatible external storages per folder management app for Frappe and ERPNext
+S3 compatible external storages per folder management app for Frappe and ERPNext (V14-...)
 
 ## Functionalities
 
