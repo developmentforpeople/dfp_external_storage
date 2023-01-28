@@ -18,7 +18,8 @@ Simlest cloud file management for Frappe / ERPNext. S3 compatible external stora
 - Bulk file relocation (upload and download). You can filter by local S3 bucket/local filesystem and then change all those files to a different S3 bucket/local filesystem.
 - Small icon allows you visualize if file is within an S3 bucket.
 - Same file upload reuse existent S3 key and is not reuploaded.
-- S3 bucket can not be deleted if has "File"s assigned
+- S3 bucket can not be deleted if has "File"s assigned.
+- If bucket is not accesible file will be uploaded to local filesystem.
 - ...
 
 
