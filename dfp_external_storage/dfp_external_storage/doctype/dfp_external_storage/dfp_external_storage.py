@@ -222,10 +222,11 @@ class DFPExternalStorageFile(File):
 			"dfp_external_storage_s3_key": self.dfp_external_storage_s3_key,
 			"dfp_external_storage": self.dfp_external_storage
 		})
-		if len(files_using_s3_key) > 1:
+		if len(files_using_s3_key) > 0:
 			return
 		error_msg = _("Error deleting file in remote folder.")
 		# Only delete if connection is enabled
+		# TODO: this check must be done when moving too!!!
 		if not self.dfp_external_storage_doc.enabled:
 			error_extra = _("Write disabled for connection <strong>{}</strong>").format(
 				self.dfp_external_storage_doc.title)
@@ -253,7 +254,7 @@ class DFPExternalStorageFile(File):
 			response.close()
 			response.release_conn()
 		except:
-			error_msg = _("Error downloading file from remote folder.")
+			error_msg = _("Error downloading file from remote folder")
 			frappe.log_error(title=f"{error_msg}: {self.file_name}")
 			frappe.throw(error_msg)
 		return content
@@ -287,7 +288,7 @@ class DFPExternalStorageFile(File):
 		return True if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).validate_file_on_disk()
 
 	def exists_on_disk(self):
-		return True if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).exists_on_disk()
+		return False if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).exists_on_disk()
 
 	@frappe.whitelist()
 	def optimize_file(self):
