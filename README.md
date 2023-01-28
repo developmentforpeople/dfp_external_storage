@@ -48,8 +48,12 @@ Simlest cloud file management for Frappe / ERPNext. S3 compatible external stora
 
 ## Pending
 
-- Make tests
-- ...
+- Make tests:
+	- Create DFP External Storage
+	- Upload file to bucket
+	- Read bucket file
+	- Relocate bucket file
+	- Delete bucket file
 
 
 ## Contributing
