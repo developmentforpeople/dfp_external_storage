@@ -3,7 +3,7 @@
 Simlest cloud file management for Frappe / ERPNext. S3 compatible external storages (or S3 bucket(s)) per folder that allows you to fine-tune the location of your Frappe / ERPNext "File"s per folder: local or specific S3 bucket.
 
 
-# Requirements
+## Requirements
 
 - Frappe version >= 14
 
@@ -23,7 +23,7 @@ Simlest cloud file management for Frappe / ERPNext. S3 compatible external stora
 - ...
 
 
-### Flow options
+## Flow options
 
 - No S3 external storages defined:
 	- All uploaded files are saved in local filesystem
@@ -44,6 +44,46 @@ Simlest cloud file management for Frappe / ERPNext. S3 compatible external stora
 - If a "File" has no "DFP External Storage" assigned, so it is in local filesystem:
 	- If assigned a "DFP External Storage", file will be:
 		- "uploaded" to that bucket > "deleted" from filesystem
+
+
+## Setup or try it locally
+
+### Install Frappe 14
+Follow all steps for your OS within official guide: [https://frappeframework.com/docs/v14/user/en/installation](https://frappeframework.com/docs/v14/user/en/installation).
+
+
+### Create your personal "frappe-bench" environment (customizable folder name)
+
+Into your home folder:
+
+```
+cd ~
+bench init frappe-bench
+```
+
+
+### Install "dfp_external_storage" app
+
+```
+cd ~/frappe-bench
+bench get-app git@github.com:developmentforpeople/dfp_external_storage.git
+```
+
+
+### Create a new site with "dfp_external_storage" app installed on it
+
+```
+cd ~/frappe-bench
+bench new-site dfp_external_storage_site.localhost --install-app dfp_external_storage
+```
+
+
+### Initialize servers to get site running
+
+```
+cd ~/frappe-bench
+bench start
+```
 
 
 ## Pending
