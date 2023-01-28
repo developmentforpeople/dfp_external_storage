@@ -23,7 +23,7 @@ Simlest cloud file management for Frappe / ERPNext. S3 compatible external stora
 - ...
 
 
-## Flow options
+### Flow options
 
 - No S3 external storages defined:
 	- All uploaded files are saved in local filesystem
