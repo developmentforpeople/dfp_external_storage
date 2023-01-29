@@ -87,6 +87,12 @@ cd ~/frappe-bench
 bench start
 ```
 
+### Create one or more "DFP External Storage"s
+
+Add one or more S3 bucket and, this is the most important step, assign "Home" folder to it. This makes all files uploaded to Frappe / ERPNext being uploaded to that bucket.
+
+You can select a different folder and only those files will be uploaded, or select different buckets for different folders, your imagination is your limit!! :D
+
 
 ## Pending
 
