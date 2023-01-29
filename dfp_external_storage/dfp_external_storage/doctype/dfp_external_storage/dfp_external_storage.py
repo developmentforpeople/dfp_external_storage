@@ -174,7 +174,10 @@ class DFPExternalStorageFile(File):
 			dfp_ext_strg_doc = None
 			# 1. Use defined
 			if self.dfp_external_storage:
-				dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", self.dfp_external_storage)
+				try:
+					dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", self.dfp_external_storage)
+				except:
+					pass
 			if not dfp_ext_strg_doc:
 				# 2. Specific folder connection
 				dfp_ext_strg_name = frappe.db.get_value(

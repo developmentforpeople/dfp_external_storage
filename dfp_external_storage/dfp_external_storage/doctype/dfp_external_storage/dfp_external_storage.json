@@ -115,7 +115,8 @@
    "fieldtype": "Int",
    "hidden": 1,
    "is_virtual": 1,
-   "label": "Files within"
+   "label": "Files within",
+   "non_negative": 1
   }
  ],
  "links": [
@@ -125,7 +126,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2023-01-29 12:29:52.313661",
+ "modified": "2023-01-29 13:28:47.993252",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
