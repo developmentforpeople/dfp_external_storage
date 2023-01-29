@@ -1,6 +1,6 @@
 # DFP External Storage
 
-Simplest cloud file management for Frappe / ERPNext. S3 compatible external storages (or S3 bucket(s)) per folder that allows you to fine-tune the location of your Frappe / ERPNext "File"s per folder: local or specific S3 bucket.
+Simplest cloud file management for Frappe / ERPNext. S3 compatible external bucket can be assigned per Frappe folder, allowing you to fine-tune the location of your Frappe / ERPNext "File"s: within local filesystem or to exteral S3 bucket.
 
 [![Frappe files within S3 buckets](/dfp_external_storage/public/image/demo.png)](https://www.youtube.com/embed/2uTnWZxhtug)
 
@@ -12,29 +12,27 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external stor
 
 ## Functionalities
 
-- S3 bucket for all Frappe/ERPNext files (public and private).
-- S3 bucket can be defined per folder. If "Home" folder defined, all files will use that S3 bucket.
+- S3 bucket can be defined per folder/s. If "Home" folder defined, all Frappe / ERPNext files will use that S3 bucket.
 - Files accesible with custom URLs: /file/[File ID]/[file name.extension]
-- Private/Public preserved. If a private file not logged a 404 not found page will be showed.
-- External Storages can be write disabled.
-- Bulk file relocation (upload and download). You can filter by local S3 bucket/local filesystem and then change all those files to a different S3 bucket/local filesystem.
+- Frappe / ERPNext private/public functionality is preserved for external files. If an external private file is loaded not having access a not found page will be showed.
+- External Storages can be write disabled, but files will be visible yet.
+- Bulk file relocation (upload and download). You can filter by local S3 bucket/local filesystem and then change all those files to a different S3 bucket or to local filesystem.
 - Small icon allows you visualize if file is within an S3 bucket.
-- Same file upload reuse existent S3 key and is not reuploaded.
-- S3 bucket can not be deleted if has "File"s assigned.
+- Same file upload (same file hash) will reuse existent S3 key and is not reuploaded. Same functionality as Frappe has with local files.
+- S3 bucket can not be deleted if has "File"s assigned / within it.
 - If bucket is not accesible file will be uploaded to local filesystem.
-- ...
+- ... maybe I am forgetting something ;)
 
 
 ### Flow options
 
-- No S3 external storages defined:
+- No S3 external storages defined
+- or S3 external storages defined but not assigned to folders:
 	- All uploaded files are saved in local filesystem
-- S3 external storages defined but not assigned to folders:
-	- All files are saved in local filesystem
 - One S3 external storage assigned to "Attachments" folder:
-	- All files uploaded to that folder are placed inside that S3 bucket
+	- Only files uploaded to that folder will be use that S3 bucket
 - One S3 external storage assigned to "Home" folder:
-	- All files uploaded to Frappe are uploaded to assigned bucket. Except the files uploaded to "Attachments" that will use the above defined bucket
+	- All files uploaded to Frappe will be located within that bucket. Except the files uploaded to "Attachments" that will use the above defined bucket
 
 
 ### File actions available
