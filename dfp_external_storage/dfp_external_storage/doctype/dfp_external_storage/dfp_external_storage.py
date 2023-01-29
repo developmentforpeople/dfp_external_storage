@@ -20,10 +20,45 @@ DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS = 60 * 60 * 24
 DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD = "file"
 
 
+DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
+	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
+DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
+	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+
+
 class DFPExternalStorage(Document):
+
 	def validate(self):
-		# TODO: sólo comprobar conexión se se cambia algún parámetro
-		self.validate_bucket()
+		def has_changed(doc_a:Document, doc_b:Document, fields:list):
+			for param in fields:
+				value_a = getattr(doc_a, param)
+				value_b = getattr(doc_b, param)
+				if type(value_a) == list:
+					if not [i.name for i in value_a] == [i.name for i in value_b]:
+						return True
+				elif value_a != value_b:
+					return True
+			return False
+
+		# Recheck S3 connection if needed
+		previous = self.get_doc_before_save()
+		if previous:
+			if self.files_within and has_changed(self, previous, DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS):
+				frappe.throw(_("There are {} files using this bucket. Field updated is critical.")
+					.format(self.files_within))
+		if not previous or has_changed(self, previous, DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS):
+			self.validate_bucket()
+
+	def on_trash(self):
+		if self.files_within:
+			frappe.throw(_("Can not be deleted. There are {} files using this bucket.")
+				.format(self.files_within))
+
+	@property
+	def files_within(self):
+		if not hasattr(self, "_files_within"):
+			self._files_within = frappe.db.count("File", filters={"dfp_external_storage": self.name})
+		return self._files_within
 
 	def validate_bucket(self):
 		if self.client:
@@ -33,16 +68,23 @@ class DFPExternalStorage(Document):
 	def client(self):
 		if not hasattr(self, "_client"):
 			self._client = None
-			if self.endpoint and self.access_key and self.region:
-				self._client = MinioConnection(
-					endpoint=self.endpoint,
-					access_key=self.access_key,
-					secret_key=get_decrypted_password(
-						"DFP External Storage", self.name, "secret_key"
-					),
-					region=self.region,
-					secure=self.secure,
-				)
+			if self.endpoint and self.access_key and self.secret_key and self.region:
+				try:
+					if self.is_new() and self.secret_key:
+						key_secret = self.secret_key
+					else:
+						key_secret = get_decrypted_password(
+							"DFP External Storage", self.name, "secret_key")
+					if key_secret:
+						self._client = MinioConnection(
+							endpoint=self.endpoint,
+							access_key=self.access_key,
+							secret_key=key_secret,
+							region=self.region,
+							secure=self.secure,
+						)
+				except:
+					pass
 		return self._client
 
 
@@ -222,7 +264,7 @@ class DFPExternalStorageFile(File):
 			"dfp_external_storage_s3_key": self.dfp_external_storage_s3_key,
 			"dfp_external_storage": self.dfp_external_storage
 		})
-		if len(files_using_s3_key) > 0:
+		if len(files_using_s3_key):
 			return
 		error_msg = _("Error deleting file in remote folder.")
 		# Only delete if connection is enabled

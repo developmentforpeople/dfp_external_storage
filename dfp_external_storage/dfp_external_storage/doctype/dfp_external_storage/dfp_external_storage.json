@@ -1,8 +1,9 @@
 {
  "actions": [],
- "autoname": "format:DFP-STORAGE-{bucket_name}-{YYMMDD}-{##}",
+ "autoname": "format:DFP.ES.{bucket_name}.{YY}{MM}{DD}.{##}",
  "creation": "2023-01-07 18:20:18.943179",
  "doctype": "DocType",
+ "documentation": "https://github.com/developmentforpeople/dfp_external_storage#readme",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
@@ -17,7 +18,8 @@
   "region",
   "access_key",
   "secret_key",
-  "folders"
+  "folders",
+  "files_within"
  ],
  "fields": [
   {
@@ -106,6 +108,14 @@
    "fieldtype": "Data",
    "label": "Title or name",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "files_within",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "is_virtual": 1,
+   "label": "Files within"
   }
  ],
  "links": [
@@ -115,7 +125,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2023-01-22 16:30:15.741031",
+ "modified": "2023-01-29 12:29:52.313661",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
@@ -133,6 +143,7 @@
    "write": 1
   }
  ],
+ "show_name_in_global_search": 1,
  "show_title_field_in_link": 1,
  "sort_field": "modified",
  "sort_order": "DESC",
