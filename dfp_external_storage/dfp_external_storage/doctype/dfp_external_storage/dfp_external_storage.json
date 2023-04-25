@@ -93,6 +93,7 @@
    "fieldname": "folders",
    "fieldtype": "Table MultiSelect",
    "label": "Folder(s)",
+   "no_copy": 1,
    "options": "DFP External Storage by Folder"
   },
   {
@@ -126,7 +127,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2023-01-29 13:28:47.993252",
+ "modified": "2023-01-29 17:34:31.126643",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
