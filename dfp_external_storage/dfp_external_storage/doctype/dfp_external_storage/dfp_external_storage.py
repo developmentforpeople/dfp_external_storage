@@ -206,7 +206,7 @@ class DFPExternalStorageFile(File):
 		return self._dfp_external_storage_client
 
 	def dfp_external_storage_upload_file(self):
-		if not self.dfp_external_storage_doc.enabled:
+		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
 		if self.is_folder:
 			return False
@@ -272,7 +272,7 @@ class DFPExternalStorageFile(File):
 		error_msg = _("Error deleting file in remote folder.")
 		# Only delete if connection is enabled
 		# TODO: this check must be done when moving too!!!
-		if not self.dfp_external_storage_doc.enabled:
+		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			error_extra = _("Write disabled for connection <strong>{}</strong>").format(
 				self.dfp_external_storage_doc.title)
 			frappe.throw(f"{error_msg} {error_extra}")
