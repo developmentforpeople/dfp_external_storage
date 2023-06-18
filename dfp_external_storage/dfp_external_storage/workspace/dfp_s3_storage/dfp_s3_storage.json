@@ -1,0 +1,75 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"lJ8l3BHTX1\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\">DFP S3 External Storage</span>\",\"col\":12}},{\"id\":\"WYRPnnTp_6\",\"type\":\"paragraph\",\"data\":{\"text\":\"Save all your files within external S3 compatible buckets.\",\"col\":12}},{\"id\":\"oI7vMTVg02\",\"type\":\"paragraph\",\"data\":{\"text\":\"- All files to same bucket. Create one \\\"External Storage\\\" and select folder \\\"Home\\\". All uploaded files will be placed within that bucket.<br>- Specific bucket for specific folder. Create one&nbsp;\\\"External Storage\\\" and select your desired folder. All files uploaded to that folder will be located within that bucket.<br>- Files uploaded to folders without an associated External Storage will be uploaded to Frappe server filesystem.<br><br>\",\"col\":12}},{\"id\":\"sJeEGzDhRH\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Options</b></span>\",\"col\":12}},{\"id\":\"vvHVT56u0Y\",\"type\":\"card\",\"data\":{\"card_name\":\"Files management\",\"col\":6}},{\"id\":\"iAh65EH8jM\",\"type\":\"card\",\"data\":{\"card_name\":\"Settings\",\"col\":6}}]",
+ "creation": "2023-01-21 19:54:04.398437",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "stock",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "DFP S3 Storage",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Files management",
+   "link_count": 1,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Files",
+   "link_count": 0,
+   "link_to": "File",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Settings",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "External Storages",
+   "link_count": 0,
+   "link_to": "DFP External Storage",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Error Logs",
+   "link_count": 0,
+   "link_to": "Error Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2023-06-18 10:18:28.101166",
+ "modified_by": "Administrator",
+ "module": "DFP External Storage",
+ "name": "DFP S3 Storage",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 3.0,
+ "shortcuts": [],
+ "title": "DFP S3 Storage"
+}
