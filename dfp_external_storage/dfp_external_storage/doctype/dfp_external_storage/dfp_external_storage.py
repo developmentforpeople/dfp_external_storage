@@ -1,6 +1,7 @@
 
 import os
 import re
+import io
 import mimetypes
 from werkzeug.wrappers import Response
 from minio import Minio
@@ -24,6 +25,32 @@ DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+
+class S3FileProxy:
+
+	def __init__(self,readFn,size):
+		self.readFn=readFn
+		self.size = size
+		self.offset = 0
+
+	def seek(self,offset,whence=0):
+		#print(f"S3FileProxy seeking of type {whence} by {offset}")
+		if whence == io.SEEK_SET:
+			self.offset = offset
+		elif whence == io.SEEK_CUR:
+			self.offset = self.offset + offset
+		elif whence == io.SEEK_END:
+			self.offset = self.size + offset
+	def seekable(self):
+		return True
+	def tell(self):
+		return self.offset
+	
+	def read(self,size=0):
+		#print(f"S3FileProxy reading at {self.offset}, {size} bytes")
+		content = self.readFn(self.offset,size)
+		self.offset = self.offset + len(content)
+		return content
 
 
 class DFPExternalStorage(Document):
@@ -121,7 +148,18 @@ class MinioConnection:
 		"""
 		return self.client.remove_object(bucket_name=bucket_name, object_name=object_name)
 
-	def get_object(self, bucket_name:str, object_name:str):
+	def stat_object(self, bucket_name:str, object_name:str):
+		"""
+		Minio params:
+		:param bucket_name: Name of the bucket.
+		:param object_name: Object name in the bucket.
+		:param version_id: Version ID of the object.
+		"""
+		return self.client.stat_object(bucket_name=bucket_name, object_name=object_name)
+
+
+
+	def get_object(self, bucket_name:str, object_name:str,offset:int = 0,length:int = 0):
 		"""
 		Minio params:
 		:param bucket_name: Name of the bucket.
@@ -134,7 +172,23 @@ class MinioConnection:
 		:param extra_query_params: Extra query parameters for advanced usage.
 		:return: :class:`urllib3.response.HTTPResponse` object.
 		"""
-		return self.client.get_object(bucket_name=bucket_name, object_name=object_name)
+		return self.client.get_object(bucket_name=bucket_name, object_name=object_name,offset=offset,length=length)
+
+	def fget_object(self, bucket_name:str, object_name:str,file_path:str):
+		"""
+		Minio params:
+		:param bucket_name: Name of the bucket.
+		:param object_name: Object name in the bucket.
+		:param file_path: Name of file to download
+		:param request_headers: Any additional headers to be added with GET request.
+		:param ssec: Server-side encryption customer key.
+		:param version_id: Version-ID of the object.
+		:param extra_query_params: Extra query parameters for advanced usage.
+		:param temp_file_path: Path to a temporary file
+		:return: :class:`urllib3.response.HTTPResponse` object.
+		"""
+		return self.client.fget_object(bucket_name=bucket_name, object_name=object_name,file_path=file_path)
+
 
 	def put_object(self, bucket_name, object_name, data,
 			metadata=None, length=-1, part_size=10 * 1024 * 1024):
@@ -205,7 +259,11 @@ class DFPExternalStorageFile(File):
 				self._dfp_external_storage_client = self.dfp_external_storage_doc.client
 		return self._dfp_external_storage_client
 
-	def dfp_external_storage_upload_file(self):
+	def dfp_external_storage_upload_file(self,local_file=None,delete_file=True):
+		"""
+		:param local_file: if given, the path to a file to read the content from. If not given, the content field of this File is used
+		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
+		"""
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
 		if self.is_folder:
@@ -213,7 +271,7 @@ class DFPExternalStorageFile(File):
 		if self.dfp_external_storage_s3_key:
 			# File already on S3
 			return False
-		if self.file_url.startswith(URL_PREFIXES):
+		if self.file_url and self.file_url.startswith(URL_PREFIXES):
 			# frappe.throw(_("Not implemented save http(s)://file(s) to local."))
 			raise NotImplementedError("http(s)://file(s) not ready to be saved to local or external storage(s).")
 
@@ -221,12 +279,13 @@ class DFPExternalStorageFile(File):
 
 		key = f"{frappe.local.site}/{self.file_name}"
 		is_public = "/public" if not self.is_private else ""
-		local_file = frappe.local.site + is_public + self.file_url
+		if not local_file:
+			local_file = "./" + frappe.local.site + is_public + self.file_url
 
 		try:
 			if not os.path.exists(local_file):
 				frappe.throw(_("Local file not found"))
-			with open("./" + local_file, "rb") as f:
+			with open(local_file, "rb") as f:
 				self.dfp_external_storage_client.put_object(
 					bucket_name=self.dfp_external_storage_doc.bucket_name,
 					object_name=key,
@@ -241,7 +300,8 @@ class DFPExternalStorageFile(File):
 			self.dfp_external_storage = self.dfp_external_storage_doc.name
 			self.file_url = f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
 
-			os.remove("./" + local_file)
+			if delete_file:
+				os.remove(local_file)
 			self.save()
 		except:
 			error_msg = _("Error saving file in remote folder.")
@@ -257,6 +317,10 @@ class DFPExternalStorageFile(File):
 			# If modifing existent file throw error
 			else:
 				frappe.throw(error_msg)
+
+	def set_is_private(self):
+		if not self.dfp_external_storage_s3_key:
+			super(DFPExternalStorageFile, self).set_is_private()
 
 	def dfp_external_storage_delete_file(self):
 		if not self.dfp_external_storage_s3_key or not self.dfp_external_storage_doc:
@@ -283,6 +347,53 @@ class DFPExternalStorageFile(File):
 		except:
 			frappe.log_error(f"{error_msg}: {self.file_name}")
 			frappe.throw(error_msg)
+
+	def dfp_external_storage_download_to_file(self,local_file):
+		"""
+		Stream file from S3 directly to local_file. This avoids reading the whole file into memory at any point
+		:param local_file: path to a local file to stream content to
+		"""
+		if not self.dfp_external_storage_s3_key:
+			# frappe.msgprint(_("S3 key not found: ") + self.file_name,
+			# 	indicator="red", title=_("Error processing File"), alert=True)
+			return
+		try:
+			key = self.dfp_external_storage_s3_key
+
+			self.dfp_external_storage_client.fget_object(
+				bucket_name=self.dfp_external_storage_doc.bucket_name,
+				object_name=key,
+				file_path=local_file)
+		except:
+			error_msg = _("Error downloading to file from remote folder")
+			frappe.log_error(title=f"{error_msg}: {self.file_name}")
+			frappe.throw(error_msg)
+
+	def dfp_external_storage_file_proxy(self):
+		"""
+		Get a read-only file-like object that will read requested bytes directly from S3. This allows you to
+		avoid downloading the whole file when only parts of it will be read from.
+		"""
+		if not self.dfp_external_storage_s3_key:
+			return
+
+
+		info = self.dfp_external_storage_client.stat_object(
+			bucket_name=self.dfp_external_storage_doc.bucket_name,
+			object_name=self.dfp_external_storage_s3_key)
+
+		def read(offset=0,size=0):
+			response = self.dfp_external_storage_client.get_object(
+				bucket_name=self.dfp_external_storage_doc.bucket_name,
+				object_name=self.dfp_external_storage_s3_key,
+				offset=offset,
+				length=size)
+			content = response.read()
+			response.close()
+			response.release_conn()
+			return content
+
+		return S3FileProxy(read,info.size)
 
 	def dfp_external_storage_download_file(self):
 		if not self.dfp_external_storage_s3_key:
