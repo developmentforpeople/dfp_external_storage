@@ -21,6 +21,7 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 - Same file upload (same file hash) will reuse existent S3 key and is not reuploaded. Same functionality as Frappe has with local files.
 - S3 bucket can not be deleted if has "File"s assigned / within it.
 - If bucket is not accesible file will be uploaded to local filesystem.
+- Streaming data to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
 - ... maybe I am forgetting something ;)
 
 
@@ -91,6 +92,37 @@ Add one or more S3 bucket and, this is the most important step, assign "Home" fo
 
 You can select a different folder and only those files will be uploaded, or select different buckets for different folders, your imagination is your limit!! :D
 
+### Stream data to and from S3 without reading whole files into memory
+
+Option is valuable when working with large files.
+
+For uploading content from a local file, usage would look like:
+```
+file_doc = frappe.get_doc({
+    "doctype":"File",
+    "is_private":True,
+    "file_name": "file name here"
+})
+file_doc.dfp_external_storage_upload_file(filepath)
+file_doc.save()
+```
+
+To download content to a local file:
+```
+file_doc = frappe.get_doc("File",doc_name)
+file_doc.dfp-external_storage_download_to_file("/path/to/local/file")
+```
+
+To read remote file directly via a proxy object:
+```
+file_doc = frappe.get_doc("File",doc_name)
+
+#read zip file table of contents without downloading the whole zip file
+with zipfile.ZipFile(file_doc.dfp_external_storage_file_proxy()) as z:
+  for zipinfo in z.infolist():
+     print(f"{zipinfo.filename}")
+
+```
 
 ## Pending
 
