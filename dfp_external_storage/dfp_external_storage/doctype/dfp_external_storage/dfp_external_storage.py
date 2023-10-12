@@ -71,8 +71,7 @@ class DFPExternalStorage(Document):
 		previous = self.get_doc_before_save()
 		if previous:
 			if self.files_within and has_changed(self, previous, DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS):
-				frappe.throw(_("There are {} files using this bucket. Field updated is critical.")
-					.format(self.files_within))
+				frappe.msgprint(_("There are {} files using this bucket. The field you just updated is critical, be careful!").format(self.files_within))
 		if not previous or has_changed(self, previous, DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS):
 			self.validate_bucket()
 
