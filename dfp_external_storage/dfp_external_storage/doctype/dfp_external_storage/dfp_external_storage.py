@@ -113,6 +113,21 @@ class DFPExternalStorage(Document):
 					pass
 		return self._client
 
+	@frappe.whitelist()
+	def remote_files_list(self):
+		objects = [
+			["name", "size", "last_modified"],
+		]
+		for o in self.client.list_objects(self.bucket_name, recursive=True):
+			print(o.object_name)
+			object_as_list = [o.object_name, o.size, o.last_modified]
+			objects.append(object_as_list)
+		# return objects
+		return {
+			"message": objects,
+			# "as_list": 1,
+			"as_table": 1,
+		}
 
 class MinioConnection:
 	def __init__(self, endpoint:str, access_key:str, secret_key:str, region:str, secure:bool):
@@ -211,6 +226,24 @@ class MinioConnection:
 		return self.client.put_object(bucket_name=bucket_name,
 			object_name=object_name, data=data, metadata=metadata,
 			length=length, part_size=part_size)
+
+	def list_objects(self, bucket_name:str, recursive=True):
+		"""
+		Minio params:
+		:param bucket_name: Name of the bucket.
+		# :param prefix: Object name starts with prefix.
+		# :param recursive: List recursively than directory structure emulation.
+		# :param start_after: List objects after this key name.
+		# :param include_user_meta: MinIO specific flag to control to include
+		# 						user metadata.
+		# :param include_version: Flag to control whether include object
+		# 						versions.
+		# :param use_api_v1: Flag to control to use ListObjectV1 S3 API or not.
+		# :param use_url_encoding_type: Flag to control whether URL encoding type
+		# 							to be used or not.
+		:return: Iterator of :class:`Object <Object>`.
+		"""
+		return self.client.list_objects(bucket_name=bucket_name, recursive=recursive)
 
 
 class DFPExternalStorageFile(File):

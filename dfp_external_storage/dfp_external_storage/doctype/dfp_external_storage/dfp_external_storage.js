@@ -1,7 +1,25 @@
 
 frappe.ui.form.on('DFP External Storage', {
 
+	setup: frm => {
+		frm.button_remote_files_list = null
+	},
+
 	refresh: function(frm) {
+		console.log('refresh!')
+		frm.button_remote_files_list = frm.add_custom_button(
+			__('All files in remote bucket'),
+			() => {
+				frm.call({ method: 'remote_files_list', doc: frm.doc, freeze: true })
+				.then(r => {
+					console.log('r', r)
+					console.log('json:', JSON.stringify(r.message))
+					frappe.msgprint(r.message)
+				})
+			},
+			// __('Emails')
+		)
+		// frm.button_remote_files_list.addClass('disabled')
 
 		frm.set_query('folders', function() {
 			return {
