@@ -350,9 +350,10 @@ class DFPExternalStorageFile(File):
 			else:
 				frappe.throw(error_msg)
 
-	def set_is_private(self):
-		if not self.dfp_external_storage_s3_key:
-			super(DFPExternalStorageFile, self).set_is_private()
+	# TODO: remove after double check with Khoran
+	# def set_is_private(self):
+	# 	if not self.dfp_external_storage_s3_key:
+	# 		super(DFPExternalStorageFile, self).set_is_private()
 
 	def dfp_external_storage_delete_file(self):
 		if not self.dfp_external_storage_s3_key or not self.dfp_external_storage_doc:
@@ -543,6 +544,9 @@ def hook_file_on_update(doc, method):
 		# Existent local file, but new storage selected: upload to remote
 		if not doc.dfp_external_storage_s3_key and doc.dfp_external_storage and not previous.dfp_external_storage:
 			doc.dfp_external_storage_upload_file()
+	cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{doc.name}"
+	frappe.cache().delete_key(cache_key)
+
 
 
 def hook_file_after_delete(doc, method):
@@ -572,18 +576,19 @@ class DFPExternalStorageFileRenderer:
 
 
 def file(name:str, file:str):
+	if not name or not file:
+		raise frappe.PageDoesNotExistError()
+
 	cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{name}"
 
 	response_values = frappe.cache().get_value(cache_key)
 	if not response_values:
-		if not name or not file:
-			raise frappe.PageDoesNotExistError()
-		doc = frappe.get_doc("File", name)
-		if not doc or not doc.is_downloadable() or doc.file_name != file:
-			raise frappe.PageDoesNotExistError()
-		if not doc.has_permission("read"):
-			# For security reasons never inform about if there are "permission" issues
-			# giving information about file existence so not using "raise frappe.PermissionError"
+		try:
+			doc = frappe.get_doc("File", name)
+			if not doc or not doc.is_downloadable() or doc.file_name != file:
+				raise Exception("File not available")
+		except Exception:
+			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
 			raise frappe.PageDoesNotExistError()
 
 		response_values = {}
