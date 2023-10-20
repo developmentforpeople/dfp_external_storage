@@ -113,21 +113,8 @@ class DFPExternalStorage(Document):
 					pass
 		return self._client
 
-	@frappe.whitelist()
 	def remote_files_list(self):
-		objects = [
-			["name", "size", "last_modified"],
-		]
-		for o in self.client.list_objects(self.bucket_name, recursive=True):
-			print(o.object_name)
-			object_as_list = [o.object_name, o.size, o.last_modified]
-			objects.append(object_as_list)
-		# return objects
-		return {
-			"message": objects,
-			# "as_list": 1,
-			"as_table": 1,
-		}
+		return self.client.list_objects(self.bucket_name, recursive=True)
 
 class MinioConnection:
 	def __init__(self, endpoint:str, access_key:str, secret_key:str, region:str, secure:bool):

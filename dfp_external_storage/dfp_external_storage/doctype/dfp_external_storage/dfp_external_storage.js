@@ -6,20 +6,13 @@ frappe.ui.form.on('DFP External Storage', {
 	},
 
 	refresh: function(frm) {
-		console.log('refresh!')
-		frm.button_remote_files_list = frm.add_custom_button(
-			__('All files in remote bucket'),
-			() => {
-				frm.call({ method: 'remote_files_list', doc: frm.doc, freeze: true })
-				.then(r => {
-					console.log('r', r)
-					console.log('json:', JSON.stringify(r.message))
-					frappe.msgprint(r.message)
-				})
-			},
-			// __('Emails')
-		)
-		// frm.button_remote_files_list.addClass('disabled')
+		if (frm.doc.enabled) {
+			frm.button_remote_files_list = frm.add_custom_button(
+				__('List files in bucket'),
+				() => frappe.set_route('dfp-s3-bucket-list', frm.doc.name)
+				// () => frappe.set_route('dfp-s3-bucket-list', { storage: frm.doc.name })
+			)
+		}
 
 		frm.set_query('folders', function() {
 			return {
@@ -37,7 +30,6 @@ frappe.ui.form.on('DFP External Storage', {
 				let folders_name_not_assigned = data
 					.filter(d => d.name != frm.doc.name ? d : null)
 					.map(d => d.folder)
-				console.log('folders_name_not_assigned: ', folders_name_not_assigned)
 				frm.set_query('folders', function () {
 					return {
 						filters: {
