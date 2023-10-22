@@ -5,6 +5,29 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 [![Frappe files within S3 buckets](/dfp_external_storage/public/image/demo.png)](https://www.youtube.com/embed/2uTnWZxhtug)
 
 
+## Examples / Use cases
+
+### All Frappe / ERPNext files into external S3 compatible bucket
+
+[upload_frappe_erpnext_files_s3_compatible_bucket.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/68592d26-4391-45fc-bd75-d4d5f06ce899)
+
+### Move files / objects from S3 compatible bucket to another S3 compatible bucket (between buckets in same or different connection)
+
+[move_objects_from_one_s3_compatible_bucket_to_another.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/9c4d7197-d19e-422e-85a9-8af7725014f0)
+
+### Move files / objects from S3 compatible bucket to local file system
+
+[move_objects_from_s3_compatible_to_local_filesystem.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/2d4eccf1-f7e2-4c89-9694-95ec36b6856d)
+
+### Move files in local filesystem to S3 compatible bucket
+
+[move_local_files_to_s3_compatible_bucket.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/6a19d3b6-48c6-46a1-a08d-29d3555b4419)
+
+### Per file examples
+
+[move_file_from_s3_compatible_bucket_to_different_one_then_to_local_file.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/1a4f216a-a6b4-4728-a27e-efdf4cbcf983)
+
+
 ## Requirements
 
 - Frappe version >= 14
@@ -16,12 +39,13 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 - Files accesible with custom URLs: /file/[File ID]/[file name.extension]
 - Frappe / ERPNext private/public functionality is preserved for external files. If an external private file is loaded not having access a not found page will be showed.
 - External Storages can be write disabled, but files will be visible yet.
-- Bulk file relocation (upload and download). You can filter by local S3 bucket/local filesystem and then change all those files to a different S3 bucket or to local filesystem.
+- Bulk file relocation (upload and download). You can filter by local S3 bucket/local filesystem and then change all those files to a different S3 bucket or to local filesystem. All files are "moved" without load them fully in memory optimizing large ones transfer.
 - Small icon allows you visualize if file is within an S3 bucket.
 - Same file upload (same file hash) will reuse existent S3 key and is not reuploaded. Same functionality as Frappe has with local files.
+- Choosed S3 bucket file listing tool.
 - S3 bucket can not be deleted if has "File"s assigned / within it.
 - If bucket is not accesible file will be uploaded to local filesystem.
-- Streaming data to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
+- Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
 - ... maybe I am forgetting something ;)
 
 

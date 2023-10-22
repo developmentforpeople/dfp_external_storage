@@ -4,6 +4,7 @@ import re
 import io
 import mimetypes
 from werkzeug.wrappers import Response
+from functools import cached_property
 from minio import Minio
 import frappe
 from frappe import _
@@ -26,29 +27,39 @@ DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
 
+
 class S3FileProxy:
 
-	def __init__(self,readFn,size):
-		self.readFn=readFn
-		self.size = size
+	def __init__(self, readFn, object_size):
+		self.readFn = readFn
+		self.object_size = object_size
+		self.size = object_size # DEPRECATED! size is deprecated tell to Khoran, must be replaced by object_size
 		self.offset = 0
 
-	def seek(self,offset,whence=0):
-		#print(f"S3FileProxy seeking of type {whence} by {offset}")
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_value, traceback):
+		pass
+
+	def seek(self, offset, whence=0):
+		# print(f"S3FileProxy seeking of type {whence} by {offset}")
 		if whence == io.SEEK_SET:
 			self.offset = offset
 		elif whence == io.SEEK_CUR:
 			self.offset = self.offset + offset
 		elif whence == io.SEEK_END:
-			self.offset = self.size + offset
+			self.offset = self.object_size + offset
+
 	def seekable(self):
 		return True
+
 	def tell(self):
 		return self.offset
 	
-	def read(self,size=0):
-		#print(f"S3FileProxy reading at {self.offset}, {size} bytes")
-		content = self.readFn(self.offset,size)
+	def read(self, size=0):
+		# print(f"S3FileProxy reading at {self.offset} from full {size} bytes")
+		content = self.readFn(self.offset, size)
 		self.offset = self.offset + len(content)
 		return content
 
@@ -80,38 +91,36 @@ class DFPExternalStorage(Document):
 			frappe.throw(_("Can not be deleted. There are {} files using this bucket.")
 				.format(self.files_within))
 
-	@property
+	@cached_property
 	def files_within(self):
-		if not hasattr(self, "_files_within"):
-			self._files_within = frappe.db.count("File", filters={"dfp_external_storage": self.name})
-		return self._files_within
+		return frappe.db.count("File", filters={"dfp_external_storage": self.name})
 
 	def validate_bucket(self):
 		if self.client:
 			self.client.validate_bucket(self.bucket_name)
 
-	@property
+	@cached_property
 	def client(self):
-		if not hasattr(self, "_client"):
-			self._client = None
-			if self.endpoint and self.access_key and self.secret_key and self.region:
-				try:
-					if self.is_new() and self.secret_key:
-						key_secret = self.secret_key
-					else:
-						key_secret = get_decrypted_password(
-							"DFP External Storage", self.name, "secret_key")
-					if key_secret:
-						self._client = MinioConnection(
-							endpoint=self.endpoint,
-							access_key=self.access_key,
-							secret_key=key_secret,
-							region=self.region,
-							secure=self.secure,
-						)
-				except:
-					pass
-		return self._client
+		if self.endpoint and self.access_key and self.secret_key and self.region:
+			try:
+				if self.is_new() and self.secret_key:
+					key_secret = self.secret_key
+				else:
+					key_secret = get_decrypted_password(
+						"DFP External Storage", self.name, "secret_key")
+				if key_secret:
+					return MinioConnection(
+						endpoint=self.endpoint,
+						access_key=self.access_key,
+						secret_key=key_secret,
+						region=self.region,
+						secure=self.secure,
+					)
+			except:
+				pass
+
+	def remote_files_list(self):
+		return self.client.list_objects(self.bucket_name, recursive=True)
 
 
 class MinioConnection:
@@ -155,8 +164,6 @@ class MinioConnection:
 		:param version_id: Version ID of the object.
 		"""
 		return self.client.stat_object(bucket_name=bucket_name, object_name=object_name)
-
-
 
 	def get_object(self, bucket_name:str, object_name:str,offset:int = 0,length:int = 0):
 		"""
@@ -212,6 +219,24 @@ class MinioConnection:
 			object_name=object_name, data=data, metadata=metadata,
 			length=length, part_size=part_size)
 
+	def list_objects(self, bucket_name:str, recursive=True):
+		"""
+		Minio params:
+		:param bucket_name: Name of the bucket.
+		# :param prefix: Object name starts with prefix.
+		# :param recursive: List recursively than directory structure emulation.
+		# :param start_after: List objects after this key name.
+		# :param include_user_meta: MinIO specific flag to control to include
+		# 						user metadata.
+		# :param include_version: Flag to control whether include object
+		# 						versions.
+		# :param use_api_v1: Flag to control to use ListObjectV1 S3 API or not.
+		# :param use_url_encoding_type: Flag to control whether URL encoding type
+		# 							to be used or not.
+		:return: Iterator of :class:`Object <Object>`.
+		"""
+		return self.client.list_objects(bucket_name=bucket_name, recursive=recursive)
+
 
 class DFPExternalStorageFile(File):
 	def __init__(self, *args, **kwargs):
@@ -221,42 +246,37 @@ class DFPExternalStorageFile(File):
 	def is_remote_file(self):
 		return True if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).is_remote_file
 
-	@property
+	@cached_property
 	def dfp_external_storage_doc(self):
-		if not hasattr(self, "_dfp_external_storage_doc"):
-			dfp_ext_strg_doc = None
-			# 1. Use defined
-			if self.dfp_external_storage:
-				try:
-					dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", self.dfp_external_storage)
-				except:
-					pass
-			if not dfp_ext_strg_doc:
-				# 2. Specific folder connection
+		dfp_ext_strg_doc = None
+		# 1. Use defined
+		if self.dfp_external_storage:
+			try:
+				dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", self.dfp_external_storage)
+			except:
+				pass
+		if not dfp_ext_strg_doc:
+			# 2. Specific folder connection
+			dfp_ext_strg_name = frappe.db.get_value(
+				"DFP External Storage by Folder",
+				fieldname="parent",
+				filters={ "folder": self.folder }
+			)
+			# 3. Default connection (Home folder)
+			if not dfp_ext_strg_name:
 				dfp_ext_strg_name = frappe.db.get_value(
 					"DFP External Storage by Folder",
 					fieldname="parent",
-					filters={ "folder": self.folder }
+					filters={ "folder": "Home" }
 				)
-				# 3. Default connection (Home folder)
-				if not dfp_ext_strg_name:
-					dfp_ext_strg_name = frappe.db.get_value(
-						"DFP External Storage by Folder",
-						fieldname="parent",
-						filters={ "folder": "Home" }
-					)
-				if dfp_ext_strg_name:
-					dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", dfp_ext_strg_name)
-			self._dfp_external_storage_doc = dfp_ext_strg_doc
-		return self._dfp_external_storage_doc
+			if dfp_ext_strg_name:
+				dfp_ext_strg_doc = frappe.get_doc("DFP External Storage", dfp_ext_strg_name)
+		return dfp_ext_strg_doc
 
-	@property
+	@cached_property
 	def dfp_external_storage_client(self):
-		if not hasattr(self, "_dfp_external_storage_client"):
-			self._dfp_external_storage_client = None
-			if self.dfp_external_storage_doc:
-				self._dfp_external_storage_client = self.dfp_external_storage_doc.client
-		return self._dfp_external_storage_client
+		if self.dfp_external_storage_doc:
+			return self.dfp_external_storage_doc.client
 
 	def dfp_external_storage_upload_file(self,local_file=None,delete_file=True):
 		"""
@@ -289,7 +309,7 @@ class DFPExternalStorageFile(File):
 					bucket_name=self.dfp_external_storage_doc.bucket_name,
 					object_name=key,
 					data=f,
-					length=-1,
+					length=os.path.getsize(local_file),
 					part_size=10 * 1024 * 1024,
 					# Meta removed because same s3 file can be used within different File docs
 					# metadata={"frappe_file_id": self.name}
@@ -316,11 +336,6 @@ class DFPExternalStorageFile(File):
 			# If modifing existent file throw error
 			else:
 				frappe.throw(error_msg)
-
-	# TODO: remove after double check with Khoran
-	# def set_is_private(self):
-	# 	if not self.dfp_external_storage_s3_key:
-	# 		super(DFPExternalStorageFile, self).set_is_private()
 
 	def dfp_external_storage_delete_file(self):
 		if not self.dfp_external_storage_s3_key or not self.dfp_external_storage_doc:
@@ -371,29 +386,25 @@ class DFPExternalStorageFile(File):
 
 	def dfp_external_storage_file_proxy(self):
 		"""
-		Get a read-only file-like object that will read requested bytes directly from S3. This allows you to
-		avoid downloading the whole file when only parts of it will be read from.
+		Get a read-only context manager file-like object that will read requested bytes directly from S3. This allows you to avoid downloading the whole file when only parts or chunks of it will be read from.
 		"""
 		if not self.dfp_external_storage_s3_key:
 			return
 
-
-		info = self.dfp_external_storage_client.stat_object(
+		object_info = self.dfp_external_storage_client.stat_object(
 			bucket_name=self.dfp_external_storage_doc.bucket_name,
 			object_name=self.dfp_external_storage_s3_key)
 
-		def read(offset=0,size=0):
-			response = self.dfp_external_storage_client.get_object(
+		def read_chunks(offset=0, size=0):
+			with self.dfp_external_storage_client.get_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
 				object_name=self.dfp_external_storage_s3_key,
 				offset=offset,
-				length=size)
-			content = response.read()
-			response.close()
-			response.release_conn()
+				length=size) as response:
+				content = response.read()
 			return content
 
-		return S3FileProxy(read,info.size)
+		return S3FileProxy(read_chunks, object_info.size)
 
 	def dfp_external_storage_download_file(self):
 		if not self.dfp_external_storage_s3_key:
@@ -403,12 +414,10 @@ class DFPExternalStorageFile(File):
 		content = ""
 		try:
 			key = self.dfp_external_storage_s3_key
-			response = self.dfp_external_storage_client.get_object(
+			with self.dfp_external_storage_client.get_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
-				object_name=key)
-			content = response.read()
-			response.close()
-			response.release_conn()
+				object_name=key) as response:
+				content = response.read()
 		except:
 			error_msg = _("Error downloading file from remote folder")
 			frappe.log_error(title=f"{error_msg}: {self.file_name}")
@@ -417,21 +426,15 @@ class DFPExternalStorageFile(File):
 
 	def download_to_local_and_remove_remote(self):
 		try:
-			response_get = self.dfp_external_storage_client.get_object(
-				bucket_name=self.dfp_external_storage_doc.bucket_name,
-				object_name=self.dfp_external_storage_s3_key)
-
 			bucket = self.dfp_external_storage_doc.bucket_name
 			key = self.dfp_external_storage_s3_key
 
 			self.dfp_external_storage_s3_key = ""
 			self.dfp_external_storage = ""
 
-			self._content = response_get.read()
+			with self.dfp_external_storage_client.get_object(bucket_name=bucket, object_name=key) as response:
+				self._content = response.read()
 			self.save_file_on_filesystem()
-
-			response_get.close()
-			response_get.release_conn()
 
 			self.dfp_external_storage_client.remove_object(
 				bucket_name=bucket, object_name=key)
@@ -469,20 +472,18 @@ def hook_file_before_save(doc, method):
 	elif (previous and previous.dfp_external_storage and doc.dfp_external_storage
 		and previous.dfp_external_storage != doc.dfp_external_storage):
 		try:
-			response_get = previous.dfp_external_storage_client.get_object(
-				bucket_name=previous.dfp_external_storage_doc.bucket_name,
-				object_name=previous.dfp_external_storage_s3_key)
-			doc.dfp_external_storage_client.put_object(
-				bucket_name=doc.dfp_external_storage_doc.bucket_name,
-				object_name=doc.dfp_external_storage_s3_key,
-				data=response_get,
-				length=-1,
-				part_size=10 * 1024 * 1024,
-				# Meta removed because same s3 file can be used within different File docs
-				# metadata={"frappe_file_id": self.name}
-			)
-			response_get.close()
-			response_get.release_conn()
+			# Get file from previous remote in chunks of 10MB (not loading it fully in memory)
+			with previous.dfp_external_storage_file_proxy() as response:
+				doc.dfp_external_storage_client.put_object(
+					bucket_name=doc.dfp_external_storage_doc.bucket_name,
+					object_name=doc.dfp_external_storage_s3_key,
+					data=response,
+					length=response.object_size,
+					part_size=10 * 1024 * 1024, # 5MB is the minimum allowed by Minio (== 5 * 1024 * 1024)
+					# Meta removed because same s3 file can be used within different File docs
+					# metadata={"frappe_file_id": self.name}
+				)
+			# Remove file from previous remote
 			previous.dfp_external_storage_client.remove_object(
 				bucket_name=previous.dfp_external_storage_doc.bucket_name,
 				object_name=previous.dfp_external_storage_s3_key)
@@ -543,6 +544,8 @@ class DFPExternalStorageFileRenderer:
 
 
 def file(name:str, file:str):
+	# TODO: For videos enable direct stream from S3
+	# TODO: Implement direct download from S3 bucket with signed url (videos & streaming ;)
 	if not name or not file:
 		raise frappe.PageDoesNotExistError()
 
