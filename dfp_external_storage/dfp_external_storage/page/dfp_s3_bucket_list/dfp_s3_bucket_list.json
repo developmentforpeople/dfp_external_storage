@@ -1,0 +1,23 @@
+{
+ "content": null,
+ "creation": "2023-10-15 13:09:14.353075",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2023-10-15 13:09:14.353075",
+ "modified_by": "Administrator",
+ "module": "DFP External Storage",
+ "name": "dfp-s3-bucket-list",
+ "owner": "Administrator",
+ "page_name": "dfp-s3-bucket-list",
+ "roles": [
+  {
+   "role": "Administrator"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "S3 bucket files"
+}

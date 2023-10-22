@@ -1,0 +1,9 @@
+
+.dfp-content-main {
+	padding: var(--padding-sm);
+}
+
+.dfp-content-main .no-files {
+	padding: 10% 0;
+	text-align: center;
+}

@@ -1,0 +1,65 @@
+{% if files.length %}
+<table class="table">
+	<thead>
+		<tr>
+			<!-- style="width: 10%" -->
+			<!-- <th>{{ __("ETAG") }}</th> -->
+			<th>{{ __("Key") }}</th>
+			<th>{{ __("Size") }}</th>
+			<th>{{ __("Storage class") }}</th>
+			<th>{{ __("Modified") }}</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for f in files %}
+		<!-- "etag": file.etag,
+		"is_dir": file.is_dir,
+			"last_modified": file.last_modified,
+		"metadata": file.metadata,
+			"name": file.object_name,
+			"size": file.size,
+			"storage_class": file.storage_class, -->
+		<tr>
+			<!-- <td class="etag"></td> -->
+			<td class="file-name">
+				{{ frappe.utils.encode_tags(f.name) }}<br>
+				<span class="text-muted">Etag: {{ toTitle(f.etag) }}</span>
+			</td>
+				<!-- </span> -->
+				<!-- </div> -->
+				<!-- {% if f.is_dir %}
+				<details>
+					<summary>{{ __("Is dir") }}</summary>
+					<div class="is_dir">
+						<pre>{{ f.is_dir }}</pre>
+					</div>
+				</details>
+				{% endif %} -->
+			<td class="size">{{ fileSizeToHumansMode(f.size) }}</td>
+			<td class="storage-class">
+				<span class="indicator-pill {{ f.storage_class }}">
+					{{ toTitle(f.storage_class) }}
+				</span>
+			</td>
+			<td class="last_modified text-muted">
+				{{ frappe.datetime.prettyDate(f.last_modified) }}
+			</td>
+		</tr>
+		{% endfor %}
+	</tbody>
+</table>
+{% else %}
+<div class="no-files">
+	<!-- <img
+		src="/assets/frappe/images/ui-states/list-empty-state.svg"
+		alt="Empty State"
+	/> -->
+	<p class="text-muted">{{ __("No files found on this bucket") }}</p>
+</div>
+{% endif %}
+<div class="footer">
+	<div class="text-muted">
+		{{ __("Last refreshed") }}
+		{{ frappe.datetime.now_datetime(true).toLocaleString() }}
+	</div>
+</div>
