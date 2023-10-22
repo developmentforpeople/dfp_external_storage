@@ -27,6 +27,12 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 
 [move_file_from_s3_compatible_bucket_to_different_one_then_to_local_file.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/1a4f216a-a6b4-4728-a27e-efdf4cbcf983)
 
+### List all remote files in bucket
+
+Shows all files in bucket, even the ones not in Frappe File doctype.
+
+[list_files_in_remote_s3_bucket.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/fbd38418-686e-45b4-b23b-048bed4d1143)
+
 
 ## Requirements
 
@@ -46,6 +52,7 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 - S3 bucket can not be deleted if has "File"s assigned / within it.
 - If bucket is not accesible file will be uploaded to local filesystem.
 - Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
+- List all remote objects in bucket (includes too the ones not uploaded trough Frappe)
 - ... maybe I am forgetting something ;)
 
 
