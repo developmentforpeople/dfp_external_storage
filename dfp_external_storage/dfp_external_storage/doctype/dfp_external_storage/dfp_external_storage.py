@@ -106,8 +106,7 @@ class DFPExternalStorage(Document):
 				if self.is_new() and self.secret_key:
 					key_secret = self.secret_key
 				else:
-					key_secret = get_decrypted_password(
-						"DFP External Storage", self.name, "secret_key")
+					key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key")
 				if key_secret:
 					return MinioConnection(
 						endpoint=self.endpoint,
@@ -196,8 +195,7 @@ class MinioConnection:
 		return self.client.fget_object(bucket_name=bucket_name, object_name=object_name,file_path=file_path)
 
 
-	def put_object(self, bucket_name, object_name, data,
-			metadata=None, length=-1, part_size=10 * 1024 * 1024):
+	def put_object(self, bucket_name, object_name, data, metadata=None, length=-1, part_size=10 * 1024 * 1024):
 		"""
 		Minio params:
 		:param bucket_name: Name of the bucket.
@@ -216,8 +214,7 @@ class MinioConnection:
 		:param legal_hold: Flag to set legal hold for the object.
 		"""
 		return self.client.put_object(bucket_name=bucket_name,
-			object_name=object_name, data=data, metadata=metadata,
-			length=length, part_size=part_size)
+ object_name=object_name, data=data, metadata=metadata, length=length, part_size=part_size)
 
 	def list_objects(self, bucket_name:str, recursive=True):
 		"""
@@ -278,11 +275,14 @@ class DFPExternalStorageFile(File):
 		if self.dfp_external_storage_doc:
 			return self.dfp_external_storage_doc.client
 
-	def dfp_external_storage_upload_file(self,local_file=None,delete_file=True):
+	def dfp_external_storage_upload_file(self, local_file=None, delete_file=True):
 		"""
 		:param local_file: if given, the path to a file to read the content from. If not given, the content field of this File is used
 		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
 		"""
+		# Do not apply for Data Import files
+		if self.attached_to_doctype in ("Data Import"):
+			return False
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
 		if self.is_folder:
@@ -322,8 +322,9 @@ class DFPExternalStorageFile(File):
 			if delete_file:
 				os.remove(local_file)
 			self.save()
-		except:
-			error_msg = _("Error saving file in remote folder.")
+		except Exception as e:
+			error_msg = _("Error saving file in remote folder: {}").format(str(e))
+			frappe.log_error(f"{error_msg}: {self.file_name}", message=e)
 			# If file is new we upload to local filesystem
 			if not self.get_doc_before_save():
 				error_extra = _("File saved in local filesystem.")
@@ -359,11 +360,11 @@ class DFPExternalStorageFile(File):
 			self.dfp_external_storage_client.remove_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
 				object_name=self.dfp_external_storage_s3_key)
-		except:
-			frappe.log_error(f"{error_msg}: {self.file_name}")
-			frappe.throw(error_msg)
+		except Exception as e:
+			frappe.log_error(f"{error_msg}: {self.file_name}", message=e)
+			frappe.throw(f"{error_msg} {str(e)}")
 
-	def dfp_external_storage_download_to_file(self,local_file):
+	def dfp_external_storage_download_to_file(self, local_file):
 		"""
 		Stream file from S3 directly to local_file. This avoids reading the whole file into memory at any point
 		:param local_file: path to a local file to stream content to
@@ -379,9 +380,9 @@ class DFPExternalStorageFile(File):
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
 				object_name=key,
 				file_path=local_file)
-		except:
-			error_msg = _("Error downloading to file from remote folder")
-			frappe.log_error(title=f"{error_msg}: {self.file_name}")
+		except Exception as e:
+			error_msg = _("Error downloading to file from remote folder. Check Error Log for more information.")
+			frappe.log_error(title=f"{error_msg}: {self.file_name}", message=e)
 			frappe.throw(error_msg)
 
 	def dfp_external_storage_file_proxy(self):
@@ -585,11 +586,7 @@ def file(name:str, file:str):
 			# TODO: NO CACHEAR SI MAYOR DE X MEGAS!! PARA NO REVENTAR REDIS!!
 			# TODO: cachear sólo thumbnail!? ....
 			if not doc.is_private:
-				frappe.cache().set_value(
-					key=cache_key,
-					val=response_values,
-					expires_in_sec=DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS,
-					)
+				frappe.cache().set_value(key=cache_key, val=response_values, expires_in_sec=DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS)
 
 	if "status" in response_values and response_values["status"] == 200:
 		return Response(**response_values)
