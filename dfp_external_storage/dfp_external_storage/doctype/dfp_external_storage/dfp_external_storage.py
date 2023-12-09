@@ -281,7 +281,7 @@ class DFPExternalStorageFile(File):
 		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
 		"""
 		# Do not apply for Data Import files
-		if self.attached_to_doctype in ("Data Import"):
+		if self.attached_to_doctype and self.attached_to_doctype in ("Data Import"):
 			return False
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
