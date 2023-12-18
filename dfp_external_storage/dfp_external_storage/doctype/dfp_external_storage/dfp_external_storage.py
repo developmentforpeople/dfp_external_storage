@@ -14,6 +14,8 @@ from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
 
 
+# 5Mb but set to 0 to disable
+DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB = 5
 DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX = "external_storage_public_file:"
 DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS = 60 * 60 * 24
 
@@ -26,6 +28,8 @@ DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+
+DFP_EXTERNAL_STORAGE_IGNORE_S3_UPLOAD_FOR_DOCTYPES = [] #["Data Import", "Prepared Report"]
 
 
 class S3FileProxy:
@@ -280,8 +284,8 @@ class DFPExternalStorageFile(File):
 		:param local_file: if given, the path to a file to read the content from. If not given, the content field of this File is used
 		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
 		"""
-		# Do not apply for Data Import and Prepared Report files
-		if self.attached_to_doctype and self.attached_to_doctype in ("Data Import", "Prepared Report"):
+		# Do not apply for files attached to some doctypes
+		if self.attached_to_doctype and self.attached_to_doctype in DFP_EXTERNAL_STORAGE_IGNORE_S3_UPLOAD_FOR_DOCTYPES:
 			return False
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
@@ -407,18 +411,19 @@ class DFPExternalStorageFile(File):
 
 		return S3FileProxy(read_chunks, object_info.size)
 
-	def dfp_external_storage_download_file(self):
+	def dfp_external_storage_download_file(self) -> bytes:
+		content = b""
 		if not self.dfp_external_storage_s3_key:
 			# frappe.msgprint(_("S3 key not found: ") + self.file_name,
 			# 	indicator="red", title=_("Error processing File"), alert=True)
-			return
-		content = ""
+			return content
 		try:
 			key = self.dfp_external_storage_s3_key
 			with self.dfp_external_storage_client.get_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
 				object_name=key) as response:
 				content = response.read()
+			return content
 		except:
 			error_msg = _("Error downloading file from remote folder")
 			frappe.log_error(title=f"{error_msg}: {self.file_name}")
@@ -458,6 +463,17 @@ class DFPExternalStorageFile(File):
 
 	def _remote_file_local_path_get(self):
 		return f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
+
+	def get_content(self) -> bytes:
+		if not self.dfp_external_storage_s3_key:
+			return super(DFPExternalStorageFile, self).get_content()
+		try:
+			if not self.is_downloadable():
+				raise Exception("File not available")
+			return self.dfp_external_storage_download_file()
+		except Exception:
+			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
+			raise frappe.PageDoesNotExistError()
 
 
 def hook_file_before_save(doc, method):
@@ -572,7 +588,7 @@ def file(name:str, file:str):
 		try:
 			filecontent = doc.dfp_external_storage_download_file()
 		except:
-			filecontent = ""
+			filecontent = b""
 
 		if filecontent:
 			response_values["response"] = filecontent
@@ -583,9 +599,8 @@ def file(name:str, file:str):
 			# 	for key, val in headers.items():
 			# 		response_values["headers"][key] = val.encode("ascii", errors="xmlcharrefreplace")
 
-			# TODO: NO CACHEAR SI MAYOR DE X MEGAS!! PARA NO REVENTAR REDIS!!
-			# TODO: cachear sólo thumbnail!? ....
-			if not doc.is_private:
+			# Do not cache if file is private or bigger than defined MB
+			if DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB and not doc.is_private and len(filecontent) < 1024 * 1024 * DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB:
 				frappe.cache().set_value(key=cache_key, val=response_values, expires_in_sec=DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS)
 
 	if "status" in response_values and response_values["status"] == 200:
