@@ -280,8 +280,8 @@ class DFPExternalStorageFile(File):
 		:param local_file: if given, the path to a file to read the content from. If not given, the content field of this File is used
 		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
 		"""
-		# Do not apply for Data Import files
-		if self.attached_to_doctype and self.attached_to_doctype in ("Data Import"):
+		# Do not apply for Data Import and Prepared Report files
+		if self.attached_to_doctype and self.attached_to_doctype in ("Data Import", "Prepared Report"):
 			return False
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
