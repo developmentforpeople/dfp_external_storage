@@ -14,6 +14,8 @@ from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
 
 
+# 5Mb but set to 0 to disable
+DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB = 5
 DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX = "external_storage_public_file:"
 DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS = 60 * 60 * 24
 
@@ -26,6 +28,8 @@ DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+
+DFP_EXTERNAL_STORAGE_IGNORE_S3_UPLOAD_FOR_DOCTYPES = [] #["Data Import", "Prepared Report"]
 
 
 class S3FileProxy:
@@ -280,8 +284,8 @@ class DFPExternalStorageFile(File):
 		:param local_file: if given, the path to a file to read the content from. If not given, the content field of this File is used
 		:param delete_file: when local_file is given and delete_file is True, than delete local_file after a successful upload. Otherwise does nothing.
 		"""
-		# Do not apply for Data Import and Prepared Report files
-		if self.attached_to_doctype and self.attached_to_doctype in ("Data Import", "Prepared Report"):
+		# Do not apply for files attached to some doctypes
+		if self.attached_to_doctype and self.attached_to_doctype in DFP_EXTERNAL_STORAGE_IGNORE_S3_UPLOAD_FOR_DOCTYPES:
 			return False
 		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
 			return False
@@ -407,18 +411,19 @@ class DFPExternalStorageFile(File):
 
 		return S3FileProxy(read_chunks, object_info.size)
 
-	def dfp_external_storage_download_file(self):
+	def dfp_external_storage_download_file(self) -> bytes:
+		content = b""
 		if not self.dfp_external_storage_s3_key:
 			# frappe.msgprint(_("S3 key not found: ") + self.file_name,
 			# 	indicator="red", title=_("Error processing File"), alert=True)
-			return
-		content = ""
+			return content
 		try:
 			key = self.dfp_external_storage_s3_key
 			with self.dfp_external_storage_client.get_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
 				object_name=key) as response:
 				content = response.read()
+			return content
 		except:
 			error_msg = _("Error downloading file from remote folder")
 			frappe.log_error(title=f"{error_msg}: {self.file_name}")
@@ -460,6 +465,42 @@ class DFPExternalStorageFile(File):
 		return f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
 
 
+	def dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined(self):
+		"""
+		Set `dfp_external_storage_s3_key` if `file_url` exists and can be rendered.
+		Sometimes, when a file is copied (for example, when amending a sales invoice), we have the `file_url` but not the `key` (refer to the method `copy_attachments_from_amended_from` in `document.py`).
+		"""
+		if not self.file_url or self.is_remote_file or self.dfp_external_storage_s3_key:
+			return
+		try:
+			dfp_es_file_renderer = DFPExternalStorageFileRenderer(path=self.file_url)
+			if not dfp_es_file_renderer.can_render():
+				return
+			s3_data = frappe.get_value("File", dfp_es_file_renderer.file_id_get(), fieldname="*")
+			if s3_data:
+				self.dfp_external_storage = s3_data["dfp_external_storage"]
+				self.dfp_external_storage_s3_key = s3_data["dfp_external_storage_s3_key"]
+				self.content_hash = s3_data["content_hash"]
+				self.file_size = s3_data["file_size"]
+				# It is "duplicated" within Frappe but not in S3 😏
+				self.flags.ignore_duplicate_entry_error = True
+		except:
+			pass
+
+
+	def get_content(self) -> bytes:
+		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
+		if not self.dfp_external_storage_s3_key:
+			return super(DFPExternalStorageFile, self).get_content()
+		try:
+			if not self.is_downloadable():
+				raise Exception("File not available")
+			return self.dfp_external_storage_download_file()
+		except Exception:
+			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
+			raise frappe.PageDoesNotExistError()
+
+
 def hook_file_before_save(doc, method):
 	"This method is called before the document is saved"
 	previous = doc.get_doc_before_save()
@@ -493,13 +534,15 @@ def hook_file_before_save(doc, method):
 			frappe.log_error(f"{error_msg}: {doc.file_name}")
 			frappe.throw(error_msg)
 
-	if not doc.dfp_external_storage and doc.dfp_external_storage_s3_key:
+	# Both are mandatory
+	if bool(doc.dfp_external_storage) != bool(doc.dfp_external_storage_s3_key):
+		doc.dfp_external_storage = ""
 		doc.dfp_external_storage_s3_key = ""
 
 	if doc.dfp_external_storage_s3_key:
 		frappe.cache().delete_value(cache_key)
 		if doc.file_url != doc._remote_file_local_path_get():
-			# TODO: entra aquí alguna vez!?!??!!?
+			# When same remote s3 key is used for different files
 			doc.file_url = doc._remote_file_local_path_get()
 
 
@@ -531,6 +574,10 @@ class DFPExternalStorageFileRenderer:
 
 	def _regexed_path(self):
 		self._regex = re.search(fr"{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}\/(.+)\/(.+\.\w+)$", self.path)
+
+	def file_id_get(self):
+		if self.can_render():
+			return self._regex[1]
 
 	def can_render(self):
 		if not self._regex:
@@ -572,7 +619,7 @@ def file(name:str, file:str):
 		try:
 			filecontent = doc.dfp_external_storage_download_file()
 		except:
-			filecontent = ""
+			filecontent = b""
 
 		if filecontent:
 			response_values["response"] = filecontent
@@ -583,9 +630,8 @@ def file(name:str, file:str):
 			# 	for key, val in headers.items():
 			# 		response_values["headers"][key] = val.encode("ascii", errors="xmlcharrefreplace")
 
-			# TODO: NO CACHEAR SI MAYOR DE X MEGAS!! PARA NO REVENTAR REDIS!!
-			# TODO: cachear sólo thumbnail!? ....
-			if not doc.is_private:
+			# Do not cache if file is private or bigger than defined MB
+			if DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB and not doc.is_private and len(filecontent) < 1024 * 1024 * DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB:
 				frappe.cache().set_value(key=cache_key, val=response_values, expires_in_sec=DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS)
 
 	if "status" in response_values and response_values["status"] == 200:
