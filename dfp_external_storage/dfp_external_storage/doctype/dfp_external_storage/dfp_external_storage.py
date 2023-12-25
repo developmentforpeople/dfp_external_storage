@@ -464,7 +464,32 @@ class DFPExternalStorageFile(File):
 	def _remote_file_local_path_get(self):
 		return f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
 
+
+	def dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined(self):
+		"""
+		Set `dfp_external_storage_s3_key` if `file_url` exists and can be rendered.
+		Sometimes, when a file is copied (for example, when amending a sales invoice), we have the `file_url` but not the `key` (refer to the method `copy_attachments_from_amended_from` in `document.py`).
+		"""
+		if not self.file_url or self.is_remote_file or self.dfp_external_storage_s3_key:
+			return
+		try:
+			dfp_es_file_renderer = DFPExternalStorageFileRenderer(path=self.file_url)
+			if not dfp_es_file_renderer.can_render():
+				return
+			s3_data = frappe.get_value("File", dfp_es_file_renderer.file_id_get(), fieldname="*")
+			if s3_data:
+				self.dfp_external_storage = s3_data["dfp_external_storage"]
+				self.dfp_external_storage_s3_key = s3_data["dfp_external_storage_s3_key"]
+				self.content_hash = s3_data["content_hash"]
+				self.file_size = s3_data["file_size"]
+				# It is "duplicated" within Frappe but not in S3 😏
+				self.flags.ignore_duplicate_entry_error = True
+		except:
+			pass
+
+
 	def get_content(self) -> bytes:
+		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
 		if not self.dfp_external_storage_s3_key:
 			return super(DFPExternalStorageFile, self).get_content()
 		try:
@@ -509,13 +534,15 @@ def hook_file_before_save(doc, method):
 			frappe.log_error(f"{error_msg}: {doc.file_name}")
 			frappe.throw(error_msg)
 
-	if not doc.dfp_external_storage and doc.dfp_external_storage_s3_key:
+	# Both are mandatory
+	if bool(doc.dfp_external_storage) != bool(doc.dfp_external_storage_s3_key):
+		doc.dfp_external_storage = ""
 		doc.dfp_external_storage_s3_key = ""
 
 	if doc.dfp_external_storage_s3_key:
 		frappe.cache().delete_value(cache_key)
 		if doc.file_url != doc._remote_file_local_path_get():
-			# TODO: entra aquí alguna vez!?!??!!?
+			# When same remote s3 key is used for different files
 			doc.file_url = doc._remote_file_local_path_get()
 
 
@@ -547,6 +574,10 @@ class DFPExternalStorageFileRenderer:
 
 	def _regexed_path(self):
 		self._regex = re.search(fr"{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}\/(.+)\/(.+\.\w+)$", self.path)
+
+	def file_id_get(self):
+		if self.can_render():
+			return self._regex[1]
 
 	def can_render(self):
 		if not self._regex:
