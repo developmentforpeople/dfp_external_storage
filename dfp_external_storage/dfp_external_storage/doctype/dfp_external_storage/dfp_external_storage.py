@@ -4,6 +4,7 @@ import re
 import io
 import mimetypes
 from werkzeug.wrappers import Response
+from werkzeug.wsgi import wrap_file
 from functools import cached_property
 from minio import Minio
 import frappe
@@ -592,12 +593,12 @@ class DFPExternalStorageFileRenderer:
 
 
 def file(name:str, file:str):
-	# TODO: For videos enable direct stream from S3
-	# TODO: Implement direct download from S3 bucket with signed url (videos & streaming ;)
 	if not name or not file:
 		raise frappe.PageDoesNotExistError()
 
 	cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{name}"
+	should_cache=False
+	proxy=None
 
 	response_values = frappe.cache().get_value(cache_key)
 	if not response_values:
@@ -609,15 +610,25 @@ def file(name:str, file:str):
 			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
 			raise frappe.PageDoesNotExistError()
 
+		#if doc.file_size == 0, it's probably not up-to-date, so don't cache as it could be any size
+		should_cache = DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB \
+						and not doc.is_private  \
+						and doc.file_size != 0 \
+						and doc.file_size < 1024 * 1024 * DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB
+
 		response_values = {}
-		content_type, encoding = mimetypes.guess_type(doc.file_name)
+		content_type, _= mimetypes.guess_type(doc.file_name)
 		if content_type:
 			response_values["mimetype"] = content_type
-			if encoding:
-				response_values["charset"] = encoding
 
 		try:
-			filecontent = doc.dfp_external_storage_download_file()
+			#if it's small enough to cache, we don't need to stream it
+			if should_cache:
+				filecontent = doc.dfp_external_storage_download_file()
+			else:
+				proxy = doc.dfp_external_storage_file_proxy()
+				#set buffer to 10MB
+				filecontent= wrap_file(frappe.local.request.environ,proxy,10000000)
 		except:
 			filecontent = b""
 
@@ -631,10 +642,13 @@ def file(name:str, file:str):
 			# 		response_values["headers"][key] = val.encode("ascii", errors="xmlcharrefreplace")
 
 			# Do not cache if file is private or bigger than defined MB
-			if DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB and not doc.is_private and len(filecontent) < 1024 * 1024 * DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB:
+			if should_cache:
 				frappe.cache().set_value(key=cache_key, val=response_values, expires_in_sec=DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_EXPIRATION_IN_SECS)
 
 	if "status" in response_values and response_values["status"] == 200:
-		return Response(**response_values)
+		resp = Response(**response_values)
+		if not should_cache and proxy:
+			resp.content_length = proxy.object_size
+		return resp
 
 	raise frappe.PageDoesNotExistError()
