@@ -623,7 +623,7 @@ def file(name:str, file:str):
 
 		try:
 			#if it's small enough to cache, we don't need to stream it
-			if should_cache:
+			if should_cache or doc.file_size < 10000000:
 				filecontent = doc.dfp_external_storage_download_file()
 			else:
 				proxy = doc.dfp_external_storage_file_proxy()
