@@ -2,8 +2,7 @@
 
 Simplest cloud file management for Frappe / ERPNext. S3 compatible external bucket can be assigned per Frappe folder, allowing you to fine-tune the location of your Frappe / ERPNext "File"s: within local filesystem or to exteral S3 bucket.
 
-[![Frappe files within S3 buckets](/dfp_external_storage/public/image/demo.png)](https://www.youtube.com/embed/2uTnWZxhtug)
-
+[![Frappe files within S3 buckets](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/e762a286-b2c7-4a9b-a7e3-486b9a0892d6)](https://www.youtube.com/embed/2uTnWZxhtug)
 
 ## Examples / Use cases
 
@@ -32,6 +31,12 @@ Simplest cloud file management for Frappe / ERPNext. S3 compatible external buck
 Shows all files in bucket, even the ones not in Frappe File doctype.
 
 [list_files_in_remote_s3_bucket.webm](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/fbd38418-686e-45b4-b23b-048bed4d1143)
+
+### Customizable
+
+Choose the best setup for you: S3 only for all site files or specified folders, use S3 / Minio presigned urls, cache or not small files, etc.
+
+![Settings](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/879bbdc9-d356-497e-ac7a-da6e10c6a138)
 
 
 ## Requirements
