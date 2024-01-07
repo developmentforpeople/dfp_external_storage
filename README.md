@@ -53,6 +53,16 @@ Shows all files in bucket, even the ones not in Frappe File doctype.
 - If bucket is not accesible file will be uploaded to local filesystem.
 - Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
 - List all remote objects in bucket (includes too the ones not uploaded trough Frappe)
+- Support for S3 / Minio presigned urls: allowing video streaming capabilities and other S3 functionalities.
+- Presigned url can be used for all files in defined folders but defined by mimetype.
+- Files are now streamed by default.
+- Extended settings per External Storage doc:
+	- Cache only files smaller than
+	- Cache for x seconds
+	- Stream buffer size
+	- Presigned url activation
+	- Presigned url only for mimetypes defined
+	- Presigned url expiration
 - ... maybe I am forgetting something ;)
 
 
