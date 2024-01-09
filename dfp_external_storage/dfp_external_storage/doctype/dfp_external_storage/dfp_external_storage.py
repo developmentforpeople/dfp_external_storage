@@ -253,7 +253,7 @@ class MinioConnection:
 			expires = timedelta(seconds=expires)
 		return self.client.presigned_get_object(bucket_name=bucket_name, object_name=object_name, expires=expires)
 
-	def put_object(self, bucket_name, object_name, data, metadata=None, length=-1, part_size=10 * 1024 * 1024):
+	def put_object(self, bucket_name, object_name, data, metadata=None, length=-1):
 		"""
 		Minio params:
 		:param bucket_name: Name of the bucket.
@@ -272,7 +272,7 @@ class MinioConnection:
 		:param legal_hold: Flag to set legal hold for the object.
 		"""
 		return self.client.put_object(bucket_name=bucket_name,
- object_name=object_name, data=data, metadata=metadata, length=length, part_size=part_size)
+ object_name=object_name, data=data, metadata=metadata, length=length)
 
 	def list_objects(self, bucket_name:str, recursive=True):
 		"""
@@ -333,7 +333,7 @@ class DFPExternalStorageFile(File):
 			return True
 
 	def dfp_is_cacheable(self):
-		return not self.is_private and self.dfp_external_storage_doc.setting_cache_files_smaller_than and self.file_size != 0 and self.file_size < 1024 * 1024 * self.dfp_external_storage_doc.setting_cache_files_smaller_than
+		return not self.is_private and self.dfp_external_storage_doc.setting_cache_files_smaller_than and self.file_size != 0 and self.file_size < self.dfp_external_storage_doc.setting_cache_files_smaller_than
 
 	@cached_property
 	def dfp_external_storage_client(self):
@@ -375,7 +375,6 @@ class DFPExternalStorageFile(File):
 					object_name=key,
 					data=f,
 					length=os.path.getsize(local_file),
-					part_size=10 * 1024 * 1024,
 					# Meta removed because same s3 file can be used within different File docs
 					# metadata={"frappe_file_id": self.name}
 				)
@@ -593,7 +592,6 @@ def hook_file_before_save(doc, method):
 					object_name=doc.dfp_external_storage_s3_key,
 					data=response,
 					length=response.object_size,
-					part_size=10 * 1024 * 1024, # 5MB is the minimum allowed by Minio (== 5 * 1024 * 1024)
 					# Meta removed because same s3 file can be used within different File docs
 					# metadata={"frappe_file_id": self.name}
 				)
