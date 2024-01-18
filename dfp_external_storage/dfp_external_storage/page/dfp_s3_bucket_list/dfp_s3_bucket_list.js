@@ -27,7 +27,7 @@ class DFPS3BucketList {
 
 		frappe.router.on('change', () => {
 			if (frappe.get_route()[0] === 'dfp-s3-bucket-list') {
-				debugger
+				// debugger
 				if (this.storage.get_value() !== frappe.get_route()[1]) {
 					this.storage.set_value(frappe.get_route()[1])
 				}
@@ -69,7 +69,8 @@ class DFPS3BucketList {
 			fieldtype: 'Select',
 			options: [
 				{ label: 'List', value: 'list' },
-				{ label: 'Grid', value: 'grid' },
+				// TODO: Create grid view ¿?
+				// { label: 'Grid', value: 'grid' },
 			],
 			default: 'list',
 			reqd: 1,
@@ -81,9 +82,10 @@ class DFPS3BucketList {
 			fieldtype: 'Select',
 			options: [
 				{ label: 'All files', value: 'all' },
-				{ label: 'Images', value: 'image' },
-				{ label: 'Videos', value: 'video' },
-				{ label: 'PDFs', value: 'pdf' },
+				// TODO: set file filters!
+				// { label: 'Images', value: 'image' },
+				// { label: 'Videos', value: 'video' },
+				// { label: 'PDFs', value: 'pdf' },
 			],
 			default: 'all',
 			change: () => this.refresh_files(),

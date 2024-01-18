@@ -19,7 +19,16 @@
   "access_key",
   "secret_key",
   "folders",
-  "files_within"
+  "files_within",
+  "advanced_settings_section",
+  "presigned_urls",
+  "presigned_url_expiration",
+  "presigned_mimetypes_starting",
+  "column_break_clee",
+  "html_mtku",
+  "stream_buffer_size",
+  "cache_files_smaller_than",
+  "cache_expiration_secs"
  ],
  "fields": [
   {
@@ -33,6 +42,8 @@
    "reqd": 1
   },
   {
+   "description": "Access key (aka user ID) of your account in S3 service.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "access_key",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -40,6 +51,8 @@
    "reqd": 1
   },
   {
+   "description": "Secret Key (aka password) of your account in S3 service.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "secret_key",
    "fieldtype": "Password",
    "label": "Secret Key",
@@ -48,12 +61,16 @@
   },
   {
    "default": "auto",
+   "description": "Region name of buckets in S3 service. Default value: \"auto\".",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "region",
    "fieldtype": "Data",
    "label": "Region",
    "reqd": 1
   },
   {
+   "description": "Be careful! I recommend you to set up your bucket as private in your provider and/or remove public access to objects. Some files you upload to Frappe",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "bucket_name",
    "fieldtype": "Data",
    "in_filter": 1,
@@ -70,6 +87,7 @@
    "options": "<p>Used Minio library (Simple Storage Service or S3) client to perform bucket and object operations), so please refer to it class initialization for more info:</p>\n<ul>\n<li><strong>endpoint</strong>: Hostname of a S3 service.</li>\n<li><strong>access_key</strong>: Access key (aka user ID) of your account in S3 service.</li>\n<li><strong>secret_key</strong>: Secret Key (aka password) of your account in S3 service.</li>\n<li><strong>session_token</strong>: Session token of your account in S3 service.</li>\n<li><strong>secure</strong>: Flag to indicate to use secure (TLS) connection to S3 service or not.</li>\n</ul>"
   },
   {
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "endpoint",
    "fieldtype": "Data",
    "in_list_view": 1,
@@ -79,6 +97,8 @@
   },
   {
    "default": "0",
+   "description": "Flag to indicate to use secure (TLS) connection to S3 service or not.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "secure",
    "fieldtype": "Check",
    "label": "\u00bfSecure?"
@@ -116,8 +136,70 @@
    "fieldtype": "Int",
    "hidden": 1,
    "is_virtual": 1,
-   "label": "Files within",
+   "label": "Files in bucket / Same as File(s) in top \"Connections\" area",
    "non_negative": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "advanced_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Advanced settings"
+  },
+  {
+   "default": "0",
+   "description": "Serve bucket objects directly from your S3 provider using \"pre-signed\" urls instead of use your Frappe server as proxy. If files match rules for being returned as presigned url, then cache settings are ignored. Your S3 provider offers some streaming capabilities that you may need (streaming videos for example)",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
+   "fieldname": "presigned_urls",
+   "fieldtype": "Check",
+   "label": "Use presigned urls"
+  },
+  {
+   "default": "video/",
+   "depends_on": "eval:doc.presigned_urls",
+   "description": "For example, use `videos/` to enable only for all videos.",
+   "fieldname": "presigned_mimetypes_starting",
+   "fieldtype": "Small Text",
+   "label": "Use presigned urls only for mime types starting with: (one per line)"
+  },
+  {
+   "fieldname": "column_break_clee",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "10000000",
+   "description": "Number of bytes for each iteration. Default: 10000000 bytes = 10Mb",
+   "documentation_url": "https://werkzeug.palletsprojects.com/en/3.0.x/wsgi/#werkzeug.wsgi.wrap_file",
+   "fieldname": "stream_buffer_size",
+   "fieldtype": "Int",
+   "label": "File stream buffer size (bytes)"
+  },
+  {
+   "default": "5000000",
+   "description": "Use Frappe cache over Redis to keep files smaller than and avoid calling to external service several times within time window defined below. Set to 0 to disable. Default: 5000000 bytes = 5Mb",
+   "fieldname": "cache_files_smaller_than",
+   "fieldtype": "Int",
+   "label": "Cache files smaller than (bytes)"
+  },
+  {
+   "default": "86400",
+   "description": "Default: 86400 seconds = 1 day",
+   "fieldname": "cache_expiration_secs",
+   "fieldtype": "Int",
+   "label": "Cached files expiration (seconds)"
+  },
+  {
+   "fieldname": "html_mtku",
+   "fieldtype": "HTML",
+   "options": "Below cache settings affect only to public files and files not returned as presigned url (directly from your bucket provider)"
+  },
+  {
+   "default": "10800",
+   "depends_on": "eval:doc.presigned_urls",
+   "description": "Default: 10800 seconds = 3 hours",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
+   "fieldname": "presigned_url_expiration",
+   "fieldtype": "Int",
+   "label": "Presigned url expiration (seconds)"
   }
  ],
  "links": [
@@ -127,7 +209,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2023-01-29 17:34:31.126643",
+ "modified": "2024-01-07 15:46:07.378844",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
