@@ -47,7 +47,6 @@ class S3FileProxy:
 		pass
 
 	def seek(self, offset, whence=0):
-		# print(f"S3FileProxy seeking of type {whence} by {offset}")
 		if whence == io.SEEK_SET:
 			self.offset = offset
 		elif whence == io.SEEK_CUR:
@@ -62,7 +61,6 @@ class S3FileProxy:
 		return self.offset
 	
 	def read(self, size=0):
-		# print(f"S3FileProxy reading at {self.offset} from full {size} bytes")
 		content = self.readFn(self.offset, size)
 		self.offset = self.offset + len(content)
 		return content
@@ -409,7 +407,7 @@ class DFPExternalStorageFile(File):
 				content = response.read()
 			return content
 
-		return S3FileProxy(read_chunks, object_info.size)
+		return S3FileProxy(readFn=read_chunks, object_size=object_info.size)
 
 	def dfp_external_storage_download_file(self) -> bytes:
 		content = b""
@@ -617,18 +615,25 @@ def file(name:str, file:str):
 				response_values["charset"] = encoding
 
 		try:
-			filecontent = doc.dfp_external_storage_download_file()
-		except:
-			filecontent = b""
+			presigned_url = doc.dfp_presigned_url_get()
+			if presigned_url:
+				frappe.flags.redirect_location = presigned_url
+				raise frappe.Redirect
+			# Do not stream file if cacheable or smaller than stream buffer chunks size
+			if doc.dfp_is_cacheable() or doc.file_size < doc.dfp_external_storage_doc.setting_stream_buffer_size:
+				response_values["response"] = doc.dfp_external_storage_download_file()
+			else:
+				response_values["response"] = doc.dfp_external_storage_stream_file()
+				response_values["headers"].append(("Content-Length", int(doc.file_size)))
+		except frappe.Redirect:
+			raise
+		except Exception as e:
+			print(f"failed to get file content: {e}")
+			pass
 
-		if filecontent:
-			response_values["response"] = filecontent
-			response_values["status"] = 200
-			response_values["headers"] = []
-			# if headers:
-			# 	response_values["headers"]["X-From-Cache"] = frappe.local.response.from_cache or False
-			# 	for key, val in headers.items():
-			# 		response_values["headers"][key] = val.encode("ascii", errors="xmlcharrefreplace")
+		if "response" not in response_values or not response_values["response"]:
+			print(f"no 'response' found in response_values: {response_values}")
+			raise frappe.PageDoesNotExistError()
 
 			# Do not cache if file is private or bigger than defined MB
 			if DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB and not doc.is_private and len(filecontent) < 1024 * 1024 * DFP_EXTERNAL_STORAGE_CACHE_PUBLIC_FILES_SMALLER_THAN_X_MB:
