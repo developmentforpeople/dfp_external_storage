@@ -456,6 +456,10 @@ class DFPExternalStorageFile(File):
 		if not self.dfp_is_s3_remote_file():
 			return
 
+		object_info = self.dfp_external_storage_client.stat_object(
+                       bucket_name=self.dfp_external_storage_doc.bucket_name,
+                       object_name=self.dfp_external_storage_s3_key)
+
 		def read_chunks(offset=0, size=0):
 			with self.dfp_external_storage_client.get_object(
 				bucket_name=self.dfp_external_storage_doc.bucket_name,
@@ -693,11 +697,11 @@ def file(name:str, file:str):
 				response_values["headers"].append(("Content-Length", int(doc.file_size)))
 		except frappe.Redirect:
 			raise
-		except:			
+		except Exception as e:			
+			print(f"failed to get file contents: {e}")
 			pass
 
 		if "response" not in response_values or not response_values["response"]:
-			print(f"no 'response' found in response_values: {response_values}")
 			raise frappe.PageDoesNotExistError()
 
 		if doc.dfp_mime_type_guess_by_file_name:
