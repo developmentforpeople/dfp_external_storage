@@ -337,7 +337,7 @@ class DFPExternalStorageFile(File):
 
 	@cached_property
 	def dfp_file_size(self) -> int:
-		if self.dfp_is_s3_remote_file and self.dfp_external_storage_doc.remote_size_enabled:
+		if self.dfp_is_s3_remote_file() and self.dfp_external_storage_doc.remote_size_enabled:
 			try:
 				object_info = self.dfp_external_storage_doc.client.stat_object(
 					bucket_name=self.dfp_external_storage_doc.bucket_name,
@@ -594,9 +594,9 @@ def hook_file_before_save(doc, method):
 	if previous and previous.dfp_external_storage and not doc.dfp_external_storage:
 		previous.download_to_local_and_remove_remote()
 		doc.file_url = previous.file_url
+		doc.dfp_external_storage_s3_key = ""
 	# Existent remote file but saved with different remote location: put file to new remote
-	elif (previous and previous.dfp_external_storage and doc.dfp_external_storage
-		and previous.dfp_external_storage != doc.dfp_external_storage):
+	elif (previous and previous.dfp_external_storage and doc.dfp_external_storage and previous.dfp_external_storage != doc.dfp_external_storage):
 		try:
 			# Get file from previous remote in chunks of 10MB (not loading it fully in memory)
 			with previous.dfp_external_storage_file_proxy() as response:
@@ -616,11 +616,6 @@ def hook_file_before_save(doc, method):
 			error_msg = _("Error putting file from one remote to another.")
 			frappe.log_error(f"{error_msg}: {doc.file_name}")
 			frappe.throw(error_msg)
-
-	# Both are mandatory
-	if bool(doc.dfp_external_storage) != bool(doc.dfp_external_storage_s3_key):
-		doc.dfp_external_storage = ""
-		doc.dfp_external_storage_s3_key = ""
 
 	if doc.dfp_external_storage_s3_key:
 		frappe.cache().delete_value(cache_key)
