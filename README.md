@@ -36,7 +36,7 @@ Shows all files in bucket, even the ones not in Frappe File doctype.
 
 Choose the best setup for you: S3 only for all site files or specified folders, use S3 / Minio presigned urls, cache or not small files, etc.
 
-![Settings](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/879bbdc9-d356-497e-ac7a-da6e10c6a138)
+![Settings](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/0ad2f24b-d37d-4882-80c4-c1e77a74f666)
 
 
 ## Requirements
@@ -68,6 +68,7 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 	- Presigned url activation
 	- Presigned url only for mimetypes defined
 	- Presigned url expiration
+	- Use S3 file size instead of saved on Frappe File (needed for files > 2GB)
 - ... maybe I am forgetting something ;)
 
 

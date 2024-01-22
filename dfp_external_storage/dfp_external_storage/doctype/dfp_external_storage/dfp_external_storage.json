@@ -25,6 +25,7 @@
   "presigned_url_expiration",
   "presigned_mimetypes_starting",
   "column_break_clee",
+  "remote_size_enabled",
   "html_mtku",
   "stream_buffer_size",
   "cache_files_smaller_than",
@@ -200,6 +201,13 @@
    "fieldname": "presigned_url_expiration",
    "fieldtype": "Int",
    "label": "Presigned url expiration (seconds)"
+  },
+  {
+   "default": "0",
+   "description": "Frappe DocType File size is limited to INT(11) in database, so if you need to store files bigger than 2GB check this setting and for download/stream file remote size will be used. Default: 0 (unchecked)",
+   "fieldname": "remote_size_enabled",
+   "fieldtype": "Check",
+   "label": "Use S3 file size"
   }
  ],
  "links": [
@@ -209,7 +217,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2024-01-07 15:46:07.378844",
+ "modified": "2024-01-19 09:41:51.220454",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",

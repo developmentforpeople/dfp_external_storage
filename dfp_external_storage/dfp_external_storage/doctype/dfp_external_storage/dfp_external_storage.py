@@ -333,7 +333,19 @@ class DFPExternalStorageFile(File):
 			return True
 
 	def dfp_is_cacheable(self):
-		return not self.is_private and self.dfp_external_storage_doc.setting_cache_files_smaller_than and self.file_size != 0 and self.file_size < self.dfp_external_storage_doc.setting_cache_files_smaller_than
+		return not self.is_private and self.dfp_external_storage_doc.setting_cache_files_smaller_than and self.dfp_file_size != 0 and self.dfp_file_size < self.dfp_external_storage_doc.setting_cache_files_smaller_than
+
+	@cached_property
+	def dfp_file_size(self) -> int:
+		if self.dfp_is_s3_remote_file() and self.dfp_external_storage_doc.remote_size_enabled:
+			try:
+				object_info = self.dfp_external_storage_doc.client.stat_object(
+					bucket_name=self.dfp_external_storage_doc.bucket_name,
+					object_name=self.dfp_external_storage_s3_key)
+				return object_info.size
+			except:
+				frappe.log_error(title=f"Error getting remote file size: {self.dfp_external_storage_s3_key}")
+		return self.file_size
 
 	@cached_property
 	def dfp_external_storage_client(self):
@@ -465,7 +477,7 @@ class DFPExternalStorageFile(File):
 				content = response.read()
 			return content
 
-		return S3FileProxy(readFn=read_chunks, object_size=self.file_size)
+		return S3FileProxy(readFn=read_chunks, object_size=self.dfp_file_size)
 
 	def dfp_external_storage_download_file(self) -> bytes:
 		content = b""
@@ -486,7 +498,7 @@ class DFPExternalStorageFile(File):
 	def dfp_external_storage_stream_file(self) -> t.Iterable[bytes]:
 		return wrap_file(environ=frappe.local.request.environ,
 			file=self.dfp_external_storage_file_proxy(),
-			buffer_size=self.dfp_external_storage_doc.setting_stream_buffer_size)
+				buffer_size=self.dfp_external_storage_doc.setting_stream_buffer_size)
 
 	def download_to_local_and_remove_remote(self):
 		try:
@@ -572,6 +584,7 @@ class DFPExternalStorageFile(File):
 				return
 		return self.dfp_external_storage_client.presigned_get_object(bucket_name=self.dfp_external_storage_doc.bucket_name, object_name=self.dfp_external_storage_s3_key, expires=self.dfp_external_storage_doc.setting_presigned_url_expiration)
 
+
 def hook_file_before_save(doc, method):
 	"This method is called before the document is saved"
 	previous = doc.get_doc_before_save()
@@ -581,9 +594,9 @@ def hook_file_before_save(doc, method):
 	if previous and previous.dfp_external_storage and not doc.dfp_external_storage:
 		previous.download_to_local_and_remove_remote()
 		doc.file_url = previous.file_url
+		doc.dfp_external_storage_s3_key = ""
 	# Existent remote file but saved with different remote location: put file to new remote
-	elif (previous and previous.dfp_external_storage and doc.dfp_external_storage
-		and previous.dfp_external_storage != doc.dfp_external_storage):
+	elif (previous and previous.dfp_external_storage and doc.dfp_external_storage and previous.dfp_external_storage != doc.dfp_external_storage):
 		try:
 			# Get file from previous remote in chunks of 10MB (not loading it fully in memory)
 			with previous.dfp_external_storage_file_proxy() as response:
@@ -604,11 +617,6 @@ def hook_file_before_save(doc, method):
 			frappe.log_error(f"{error_msg}: {doc.file_name}")
 			frappe.throw(error_msg)
 
-	# Both are mandatory
-	if bool(doc.dfp_external_storage) != bool(doc.dfp_external_storage_s3_key):
-		doc.dfp_external_storage = ""
-		doc.dfp_external_storage_s3_key = ""
-
 	if doc.dfp_external_storage_s3_key:
 		frappe.cache().delete_value(cache_key)
 		if doc.file_url != doc._remote_file_local_path_get():
@@ -617,7 +625,7 @@ def hook_file_before_save(doc, method):
 
 
 def hook_file_on_update(doc, method):
-	"This is called when values of an existing document is updated"
+	"Called when an existing document is updated"
 	previous = doc.get_doc_before_save()
 	if not previous:
 		# New remote file: upload to remote
@@ -630,9 +638,8 @@ def hook_file_on_update(doc, method):
 	frappe.cache().delete_key(cache_key)
 
 
-
 def hook_file_after_delete(doc, method):
-	"This is called after a document has been deleted"
+	"Called after a document is deleted"
 	doc.dfp_external_storage_delete_file()
 
 
@@ -686,17 +693,17 @@ def file(name:str, file:str):
 				frappe.flags.redirect_location = presigned_url
 				raise frappe.Redirect
 			# Do not stream file if cacheable or smaller than stream buffer chunks size
-			if doc.dfp_is_cacheable() or doc.file_size < doc.dfp_external_storage_doc.setting_stream_buffer_size:
+			if doc.dfp_is_cacheable() or doc.dfp_file_size < doc.dfp_external_storage_doc.setting_stream_buffer_size:
 				response_values["response"] = doc.dfp_external_storage_download_file()
 			else:
 				response_values["response"] = doc.dfp_external_storage_stream_file()
-				response_values["headers"].append(("Content-Length", doc.file_size))
+				response_values["headers"].append(("Content-Length", doc.dfp_file_size))
 		except frappe.Redirect:
 			raise
 		except:
-			pass
+			frappe.log_error(f"Error obtaining remote file content: {name}/{file}")
 
-		if not response_values["response"]:
+		if "response" not in response_values or not response_values["response"]:
 			raise frappe.PageDoesNotExistError()
 
 		if doc.dfp_mime_type_guess_by_file_name:
