@@ -109,7 +109,6 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "Home",
    "description": "Select one or more folders. Select \"Home\" folder for ALL files within Frappe being synced with this remote file connection.",
    "fieldname": "folders",
    "fieldtype": "Table MultiSelect",
@@ -217,7 +216,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2024-01-19 09:41:51.220454",
+ "modified": "2024-03-02 12:49:25.473647",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
