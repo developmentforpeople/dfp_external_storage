@@ -373,8 +373,11 @@ class DFPExternalStorageFile(File):
 
 		# TODO: MOSTRAR MENSAJE DE SUBIENDO ARCHIVO Y CERRARLO O MOSTRAR ARCHIVO SUBIDO AL FINAL DE ESTE MÉTODO
 
+		# Define S3 key
+		# key = f"{frappe.local.site}/{self.file_name}" # << Before 2024.03.03
 		base, extension = os.path.splitext(self.file_name)
 		key = f"{frappe.local.site}/{base}-{self.name}{extension}"
+
 		is_public = "/public" if not self.is_private else ""
 		if not local_file:
 			local_file = "./" + frappe.local.site + is_public + self.file_url
