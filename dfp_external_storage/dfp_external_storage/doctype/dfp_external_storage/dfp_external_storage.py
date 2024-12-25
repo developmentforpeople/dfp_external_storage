@@ -330,6 +330,9 @@ class DFPExternalStorageFile(File):
 		if self.dfp_external_storage_s3_key and self.dfp_external_storage_doc:
 			return True
 
+	def will_be_remote(self):
+		return self.dfp_external_storage_doc != None
+
 	def dfp_is_cacheable(self):
 		return not self.is_private and self.dfp_external_storage_doc.setting_cache_files_smaller_than and self.dfp_file_size != 0 and self.dfp_file_size < self.dfp_external_storage_doc.setting_cache_files_smaller_than
 
@@ -377,6 +380,9 @@ class DFPExternalStorageFile(File):
 
 		original_file_url = self.file_url
 
+		if not self.name:
+			self.save()
+
 		# Define S3 key
 		# key = f"{frappe.local.site}/{self.file_name}" # << Before 2024.03.03
 		base, extension = os.path.splitext(self.file_name)
@@ -384,6 +390,8 @@ class DFPExternalStorageFile(File):
 
 		is_public = "/public" if not self.is_private else ""
 		if not local_file:
+			if not self.file_url:
+				frappe.throw("dfp_external_storage_upload_file: cannot upload file, file_url is not set and local_file not given")
 			local_file = "./" + frappe.local.site + is_public + self.file_url
 
 		try:
@@ -402,6 +410,7 @@ class DFPExternalStorageFile(File):
 			self.dfp_external_storage_s3_key = key
 			self.dfp_external_storage = self.dfp_external_storage_doc.name
 			self.file_url = f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
+
 			os.remove(local_file)
 		except Exception as e:
 			error_msg = _("Error saving file in remote folder: {}").format(str(e))
@@ -521,7 +530,10 @@ class DFPExternalStorageFile(File):
 			frappe.throw(error_msg)
 
 	def validate_file_on_disk(self):
-		return True if self.dfp_is_s3_remote_file() else super(DFPExternalStorageFile, self).validate_file_on_disk()
+		if self.dfp_is_s3_remote_file() or self.will_be_remote():
+			return True
+
+		super(DFPExternalStorageFile, self).validate_file_on_disk()
 
 	def exists_on_disk(self):
 		return False if self.dfp_is_s3_remote_file() else super(DFPExternalStorageFile, self).exists_on_disk()
@@ -594,8 +606,12 @@ def hook_file_before_save(doc, method):
 	previous = doc.get_doc_before_save()
 
 	if not previous:
-		# NEW "File": Case 1: remote selected => upload to remote and continue "File" flow
-		doc.dfp_external_storage_upload_file()
+
+		# NEW "File": Case 1a: remote selected and have file => upload to remote and continue "File" flow
+		if doc.file_url:
+			doc.dfp_external_storage_upload_file()
+
+		# NEW "File": Case 1b: remote selected and no local file (file_url) to upload => do nothing for now
 		return
 
 	# MODIFY "File"
@@ -685,7 +701,10 @@ class DFPExternalStorageFileRenderer:
 
 
 def file(name:str, file:str):
+	print(f"downloading name: {name}, file: {file}")
+
 	if not name or not file:
+		frappe.log_error("Page not found",f"name ({name}) or file ({file}) not given")
 		raise frappe.PageDoesNotExistError()
 
 	cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{name}"
@@ -698,6 +717,8 @@ def file(name:str, file:str):
 				raise Exception("File not available")
 		except Exception:
 			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
+			frappe.logger().exception(f"Page not found, either no File found {doc}, could not be downloaded, or file_name {doc and doc.file_name} does equal given name {file}")
+			frappe.log_error("Page not found",f"either no File found {doc}, could not be downloaded, or file_name {doc and doc.file_name} does equal given name {file}")
 			raise frappe.PageDoesNotExistError()
 
 		response_values = {}
@@ -717,9 +738,11 @@ def file(name:str, file:str):
 		except frappe.Redirect:
 			raise
 		except:
+			frappe.logger().exception(f"Error obtaining remote file content: {name}/{file}")
 			frappe.log_error(f"Error obtaining remote file content: {name}/{file}")
 
 		if "response" not in response_values or not response_values["response"]:
+			frappe.log_error("Page not found",f"no reponse defined. response_values: {response_values}")
 			raise frappe.PageDoesNotExistError()
 
 		if doc.dfp_mime_type_guess_by_file_name:
@@ -734,4 +757,5 @@ def file(name:str, file:str):
 	if "status" in response_values and response_values["status"] == 200:
 		return Response(**response_values)
 
+	frappe.log_error("Page not found",f"unknown reason. response so far: {response_values}")
 	raise frappe.PageDoesNotExistError()
