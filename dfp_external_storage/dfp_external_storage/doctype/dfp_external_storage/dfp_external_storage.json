@@ -30,7 +30,8 @@
   "html_mtku",
   "stream_buffer_size",
   "cache_files_smaller_than",
-  "cache_expiration_secs"
+  "cache_expiration_secs",
+  "allow_direct_upload"
  ],
  "fields": [
   {
@@ -216,6 +217,13 @@
    "fieldtype": "Table MultiSelect",
    "label": "Doctypes ignored for file attachments",
    "options": "DFP External Storage Ignored Doctype"
+  },
+  {
+   "default": "0",
+   "description": "allow uploading files directly to your cloud storage",
+   "fieldname": "allow_direct_upload",
+   "fieldtype": "Check",
+   "label": "Allow Direct Upload"
   }
  ],
  "links": [
@@ -225,7 +233,7 @@
    "link_fieldname": "dfp_external_storage"
   }
  ],
- "modified": "2024-05-29 09:57:12.889797",
+ "modified": "2025-12-08 16:20:42.760616",
  "modified_by": "Administrator",
  "module": "DFP External Storage",
  "name": "DFP External Storage",
@@ -243,6 +251,7 @@
    "write": 1
   }
  ],
+ "row_format": "Dynamic",
  "show_name_in_global_search": 1,
  "show_title_field_in_link": 1,
  "sort_field": "modified",
