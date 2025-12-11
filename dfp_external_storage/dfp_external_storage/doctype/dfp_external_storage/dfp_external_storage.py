@@ -290,6 +290,35 @@ class MinioConnection:
 		"""
 		return self.client.list_objects(bucket_name=bucket_name, recursive=recursive)
 
+	def presigned_put_object(
+			self,
+			bucket_name: str,
+			object_name: str,
+			expires: timedelta = timedelta(days=7),
+	) -> str:
+		"""
+		Get presigned URL of an object to upload data with expiry time and
+		custom request parameters.
+
+		:param bucket_name: Name of the bucket.
+		:param object_name: Object name in the bucket.
+		:param expires: Expiry in seconds; defaults to 7 days.
+		:return: URL string.
+
+		Example::
+			# Get presigned URL string to upload data to 'my-object' in
+			# 'my-bucket' with default expiry (i.e. 7 days).
+			url = client.presigned_put_object("my-bucket", "my-object")
+			print(url)
+
+			# Get presigned URL string to upload data to 'my-object' in
+			# 'my-bucket' with two hours expiry.
+			url = client.presigned_put_object(
+				"my-bucket", "my-object", expires=timedelta(hours=2),
+			)
+			print(url)
+		"""
+		return self.client.presigned_put_object(bucket_name=bucket_name, object_name=object_name, expires=expires)
 
 class DFPExternalStorageFile(File):
 	def __init__(self, *args, **kwargs):
