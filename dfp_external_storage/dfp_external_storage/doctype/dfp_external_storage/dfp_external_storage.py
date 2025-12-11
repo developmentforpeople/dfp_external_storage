@@ -89,6 +89,19 @@ class DFPExternalStorage(Document):
 				frappe.msgprint(_("There are {} files using this bucket. The field you just updated is critical, be careful!").format(self.files_within))
 		if not previous or has_changed(self, previous, DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS):
 			self.validate_bucket()
+		if not previous or has_changed(self, previous, ["allow_direct_upload"]):
+			self.validate_one_direct_upload() 
+	
+	def validate_one_direct_upload(self):
+		if not self.allow_direct_upload:
+			return
+		
+		allowed = frappe.db.get_all(self.doctype, filters={
+			"allow_direct_upload": True,
+		})
+		if allowed:
+			frappe.throw(_("You can't have more than one directupload bucket"))
+
 
 	def on_trash(self):
 		if self.files_within:
