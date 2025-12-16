@@ -57,7 +57,7 @@ class S3FileProxy:
 
 	def tell(self):
 		return self.offset
-	
+
 	def read(self, size=0):
 		content = self.readFn(self.offset, size)
 		self.offset = self.offset + len(content)
@@ -89,17 +89,23 @@ class DFPExternalStorage(Document):
 				frappe.msgprint(_("There are {} files using this bucket. The field you just updated is critical, be careful!").format(self.files_within))
 		if not previous or has_changed(self, previous, DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS):
 			self.validate_bucket()
-		if not previous or has_changed(self, previous, ["allow_direct_upload"]):
-			self.validate_one_direct_upload() 
-	
+		if not previous or has_changed(self, previous, ["allow_direct_upload", "enabled"]):
+			self.validate_one_direct_upload()
+
 	def validate_one_direct_upload(self):
-		if not self.allow_direct_upload:
+		previous = self.get_doc_before_save()
+		count = 0
+		if not self.allow_direct_upload and not self.enabled:
 			return
-		
+		if not previous and self.allow_direct_upload and self.enabled:
+			count += 1
+
 		allowed = frappe.db.get_all(self.doctype, filters={
 			"allow_direct_upload": True,
+			"enabled": True,
 		})
-		if allowed:
+		count += len(allowed)
+		if count > 1:
 			frappe.throw(_("You can't have more than one directupload bucket"))
 
 
