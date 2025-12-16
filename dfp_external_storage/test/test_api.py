@@ -15,7 +15,7 @@ class TestPresignedURLGeneration(FrappeTestCase):
         self.file_path = "Record"
         self.storage = _create_storage(name="_Test Storage normal")
 
-    
+
     def tearDown(self):
         frappe.db.rollback()
 
@@ -28,7 +28,7 @@ class TestPresignedURLGeneration(FrappeTestCase):
         self.assertIn("get_url", result)
         self.assertIn("s3_key", result)
         self.assertEqual(result["s3_key"], f"uploads/{self.file_path}/{self.file_name}")
-    
+
     def test_generate_presigned_url_fails_when_not_enabled(self):
         """Test successful presigned URL generation"""
         self.storage.enabled = False
@@ -37,7 +37,7 @@ class TestPresignedURLGeneration(FrappeTestCase):
             generate_presigned_url(
             self.file_name, self.file_path
             )
-     
+
     def test_generate_presigned_url_fails_when_not_allow_direct_upload(self):
         """Test successful presigned URL generation"""
         self.storage.allow_direct_upload = False
@@ -67,7 +67,7 @@ class TestPresignedURLGeneration(FrappeTestCase):
         doc_name = getattr(result["file_doc"],'name', "Not A FIle")
 
         self.assertTrue(frappe.db.exists("File", doc_name), f"File {doc_name} wasn't created")
-    
+
     def test_can_not_create_more_than_one_direct_upload_bucket(self):
         """Ensure only one bucket can have allow_direct_upload enabled"""
         with self.assertRaises(frappe.exceptions.ValidationError) as cx:
@@ -81,7 +81,14 @@ class TestPresignedURLGeneration(FrappeTestCase):
                 _create_storage(f"_Test Storage Enabled {i}", allow_direct_upload=False)
             except frappe.exceptions.ValidationError:
                 self.fail()
-    
+    def test_can_create_more_than_one_bucket_when_direct_upload_is_disabled_or_doc_is_not_enabled(self):
+        """Ensure bucket can be created when direct_upload or doc isn't enabled"""
+        for i in range(2):
+            try:
+                _create_storage(f"_Test Storage Enabled {i}", allow_direct_upload=True, enabled=False)
+            except frappe.exceptions.ValidationError:
+                self.fail("Couldn't create more than one disabled bucket")
+
 
 def _create_storage(name="_Test Storage", enabled=True, allow_direct_upload=True):
     if doc := frappe.db.exists("DFP External Storage", name):
