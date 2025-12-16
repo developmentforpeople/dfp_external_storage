@@ -8,7 +8,7 @@ def generate_presigned_url(file_name, file_path="Record"):
     storage_doc = _get_storage()
     if not storage_doc or not storage_doc.enabled:
         frappe.throw(_("Write disabled for connection"))
-    
+
     if not storage_doc.allow_direct_upload:
         frappe.throw(_("Direct Upload must be enabled before you can use this feature."))
 
@@ -67,7 +67,7 @@ def create_file_record(
         parent_doc = frappe.get_doc(attached_to_doctype, attached_to_name)
         parent_doc.update({attached_to_field: file_url})
         parent_doc.save(ignore_permissions=True)
-    frappe.db.commit()
+
 
     return {"file_doc": file_doc, "file_url": file_url}
 
@@ -75,6 +75,7 @@ def create_file_record(
 def _get_storage():
     storage_docs = frappe.db.get_all("DFP External Storage", filters={
 			"allow_direct_upload": True,
+            "enabled": True
 		})
     if not storage_docs:
         frappe.throw(_("No Bucket With Direct Upload Found"))
