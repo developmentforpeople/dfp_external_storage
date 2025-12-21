@@ -37,7 +37,6 @@ class FileUploader {
 		}
 
 		if (restrictions && !restrictions.allowed_file_types) {
-			// apply global allow list if present
 			let allowed_extensions = frappe.sys_defaults?.allowed_file_extensions;
 			if (allowed_extensions) {
 				restrictions.allowed_file_types = allowed_extensions
@@ -67,10 +66,14 @@ class FileUploader {
 			allow_toggle_optimize,
 			allow_google_drive,
 		});
-		this.fieldname = fieldname
-		this.doctype = doctype
-		this.docname = docname
-		this.frm = frm
+		this.fieldname = fieldname;
+		this.doctype = doctype;
+		this.docname = docname;
+		this.frm = frm;
+		this.on_success = on_success;
+		this.folder = folder || "Home";
+		this.make_attachments_public = make_attachments_public;
+
 		SetVueGlobals(app);
 		this.uploader = app.mount(this.wrapper);
 
@@ -131,6 +134,211 @@ class FileUploader {
 		return this.uploader.upload_files(this.dialog);
 	}
 
+	async direct_upload_files() {
+		try {
+			const files = this.uploader?.files || [];
+
+			if (files.length === 0) {
+				frappe.msgprint(__("Please select files to upload"));
+				return;
+			}
+
+			if (this.dialog) {
+				this.dialog.get_primary_btn().prop("disabled", true);
+				this.dialog.get_secondary_btn().prop("disabled", true);
+			}
+
+			const timestamp = frappe.datetime.now_datetime().replaceAll(/[: -]/g, "_");
+			const sessionId = `Attachment-${timestamp}`;
+
+			const initialFormData = this.frm ? { ...this.frm.doc } : null;
+
+			for (let i = 0; i < files.length; i++) {
+				const file = files[i];
+
+				try {
+					file.uploading = true;
+					file.progress = 0;
+					file.total = file.file_obj.size;
+					file.failed = false;
+					file.request_succeeded = false;
+					file.error_message = null;
+
+					const presigned = await frappe.call({
+						method: "dfp_external_storage.api.generate_presigned_url",
+						args: {
+							file_name: file.name,
+							file_path: `${this.doctype ?? "File"}/${this.docname ?? "File"}/${this.fieldname ?? sessionId}`
+						}
+					});
+
+					if (!presigned?.message) {
+						throw new Error("Failed to get presigned URL");
+					}
+
+					const { put_url, s3_key } = presigned.message;
+
+					await new Promise((resolve, reject) => {
+						const xhr = new XMLHttpRequest();
+
+						xhr.upload.addEventListener('loadstart', () => {
+							file.uploading = true;
+						});
+
+						xhr.upload.addEventListener('progress', (e) => {
+							if (e.lengthComputable) {
+								file.progress = e.loaded;
+								file.total = e.total;
+							}
+						});
+
+						xhr.upload.addEventListener('load', () => {
+							file.uploading = false;
+							resolve();
+						});
+
+						xhr.addEventListener('error', () => {
+							file.failed = true;
+							reject(new Error('Network error during upload'));
+						});
+
+						xhr.onreadystatechange = () => {
+							if (xhr.readyState === XMLHttpRequest.DONE) {
+								if (xhr.status >= 200 && xhr.status < 300) {
+									file.uploading = false;
+									resolve();
+								} else {
+									file.failed = true;
+									file.error_message = `Upload failed: ${xhr.status} ${xhr.statusText}`;
+									reject(new Error(file.error_message));
+								}
+							}
+						};
+
+						xhr.open('PUT', put_url, true);
+						xhr.setRequestHeader('Content-Type', file.file_obj.type || 'application/octet-stream');
+						xhr.send(file.file_obj);
+					});
+
+					const fileDocResponse = await frappe.call({
+						method: "dfp_external_storage.api.create_file_record",
+						args: {
+							file_name: file.name,
+							file_size: file.file_obj.size,
+							s3_key: s3_key,
+							content_type: file.file_obj.type || "application/octet-stream",
+							attached_to_doctype: this.doctype,
+							attached_to_name: this.docname,
+							attached_to_field: this.fieldname,
+							folder: this.folder,
+							is_private: file.private ? 1 : 0
+						}
+					});
+
+					file.request_succeeded = true;
+					file.doc = fileDocResponse.message;
+
+					if (this.on_success) {
+						this.on_success(fileDocResponse.message, { message: fileDocResponse.message });
+					}
+
+					if (this.frm && !this.fieldname && fileDocResponse?.message) {
+						this.frm.attachments.update_attachment(fileDocResponse.message);
+					}
+
+					// For table fields and regular fields, trigger form field update
+					if (this.frm && this.fieldname && fileDocResponse?.message?.file_url) {
+						const field = this.frm.get_field(this.fieldname);
+						if (field) {
+							// If it's a table field or attach field, this will trigger the proper update
+							field.parse_validate_and_set_in_model(fileDocResponse.message.file_url);
+						}
+					}
+
+				} catch (error) {
+					console.error(`Upload error for ${file.name}:`, error);
+					file.uploading = false;
+					file.failed = true;
+					file.error_message = error.message || "Upload failed";
+
+					frappe.show_alert({
+						message: __(`Failed to upload ${file.name}: ${file.error_message}`),
+						indicator: 'red'
+					}, 5);
+				}
+			}
+
+			if (this.frm && this.docname) {
+				const latest_doc = await frappe.call({
+					method: "frappe.client.get",
+					args: {
+						doctype: this.doctype,
+						name: this.docname
+					}
+				});
+
+				if (latest_doc && latest_doc.message) {
+					this.frm.doc.modified = latest_doc.message.modified;
+					this.frm.doc.modified_by = latest_doc.message.modified_by;
+
+					if (this.frm.doc.__last_sync_on) {
+						this.frm.doc.__last_sync_on = latest_doc.message.modified;
+					}
+
+					if (initialFormData) {
+						const formFields = this.frm.fields_dict;
+						for (let fieldname in formFields) {
+							const field = formFields[fieldname];
+							if (field.df && field.df.fieldtype !== 'Table' &&
+								initialFormData[fieldname] !== this.frm.doc[fieldname] &&
+								latest_doc.message[fieldname] === initialFormData[fieldname]) {
+
+							}
+						}
+					}
+
+					if (latest_doc.message.attachments) {
+						this.frm.doc.attachments = latest_doc.message.attachments;
+					}
+
+					if (this.frm.attachments) {
+						this.frm.attachments.refresh();
+					}
+
+					console.log("Form timestamp synced after upload");
+				}
+			}
+
+			const allSuccessful = files.every(f => f.request_succeeded);
+			const anySuccessful = files.some(f => f.request_succeeded);
+
+			if (anySuccessful) {
+				const successCount = files.filter(f => f.request_succeeded).length;
+				frappe.show_alert({
+					message: __(`Successfully uploaded ${successCount} file(s)`),
+					indicator: 'green'
+				}, 5);
+			}
+
+			if (allSuccessful && this.dialog) {
+				this.dialog.hide();
+			}
+
+		} catch (error) {
+			frappe.msgprint({
+				title: __('Upload Failed'),
+				message: error.message || __('An error occurred during upload'),
+				indicator: 'red'
+			});
+			console.error('Direct upload error:', error);
+		} finally {
+			if (this.dialog) {
+				this.dialog.get_primary_btn().prop("disabled", false);
+				this.dialog.get_secondary_btn().prop("disabled", false);
+			}
+		}
+	}
+
 	make_dialog(title) {
 		this.dialog = new frappe.ui.Dialog({
 			title: title || __("Upload"),
@@ -150,147 +358,9 @@ class FileUploader {
 
 		const $custom_button = $('<button>')
 			.addClass('btn btn-primary')
-			.text(__('Direct upload'))
-			.on('click', async () => {
-				try {
-					const filesProxy = this.uploader?.files || this.files || [];
-					const files = Array.from(filesProxy);
-
-					if (files.length === 0) {
-						frappe.msgprint(__("Please select files to upload"));
-						return;
-					}
-
-					const timestamp = frappe.datetime.get_today();
-					const sessionId = `Attachment-${timestamp}`;
-
-					const results = [];
-
-					for (let i = 0; i < files.length; i++) {
-						const file = files[i];
-
-						try {
-							file.uploading = true;
-							file.progress = 0;
-							file.total = 0;
-							file.failed = false;
-							file.request_succeeded = false;
-							file.error_message = null;
-
-							const presigned = await frappe.call({
-								method: "dfp_external_storage.api.generate_presigned_url",
-								args: {
-									file_name: file.name,
-									file_path: `${this.doctype ?? "File"}/${this.docname ?? "File"}/${this.fieldname ?? sessionId}`
-								}
-							});
-
-							if (!presigned?.message) throw new Error("Failed to get presigned URL");
-
-							const { put_url, s3_key } = presigned.message;
-
-							await new Promise((resolve, reject) => {
-								const xhr = new XMLHttpRequest();
-
-								xhr.upload.addEventListener('loadstart', () => {
-									file.uploading = true;
-									file.progress = 0;
-									file.total = file.file_obj.size;
-								});
-
-								xhr.upload.addEventListener('progress', (e) => {
-									if (e.lengthComputable) {
-										file.progress = e.loaded;
-										file.total = e.total;
-									}
-								});
-
-								xhr.addEventListener('error', () => {
-									reject(new Error('Network error during uploading'));
-								});
-
-								xhr.onreadystatechange = () => {
-									if (xhr.readyState === XMLHttpRequest.DONE) {
-										if (xhr.status >= 200 && xhr.status < 300) {
-											resolve();
-										} else {
-											reject(new Error(`upload failed: ${xhr.status} ${xhr.statusText}`));
-										}
-									}
-								};
-
-								xhr.open('PUT', put_url, true);
-								xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-								xhr.send(file.file_obj);
-							});
-
-							const fileDoc = await frappe.call({
-								method: "dfp_external_storage.api.create_file_record",
-								args: {
-									file_name: file.name,
-									file_size: file.file_obj.size,
-									s3_key: s3_key,
-									content_type: file.type || "application/octet-stream",
-									attached_to_doctype: this.doctype,
-									attached_to_name: this.docname,
-									attached_to_field: this.fieldname,
-									folder: "Home"
-								}
-							});
-// Mark as complete
-							file.uploading = false;
-							file.request_succeeded = true;
-							file.doc = fileDoc.message;
-
-							results.push({ success: true, name: file.name, file_doc: fileDoc.message });
-
-							if (this.frm && !this.fieldname && fileDoc?.message?.file_url) {
-								// if no field name specified then its an attachment
-								this.frm.attachments.update_attachment(fileDoc.message.file_doc);
-							}
-						} catch (error) {
-							console.error(`Upload error for ${file.name}:`, error);
-							file.uploading = false;
-							file.failed = true;
-							file.error_message = error.message;
-							results.push({ success: false, name: file.name, error: error.message });
-						}
-					}
-
-					const successful = results.filter(r => r.success);
-					const failed = results.filter(r => !r.success);
-
-					if (successful.length > 0) {
-						frappe.show_alert({
-							message: __(`Successfully uploaded ${successful.length} file(s)`),
-							indicator: 'green'
-						}, 5);
-
-						if (this.uploader.on_success) {
-							successful.forEach(r => this.uploader.on_success(r.file_doc));
-						}
-					}
-
-					if (failed.length > 0) {
-						frappe.msgprint({
-							title: __('Upload Errors'),
-							message: failed.map(f => `${f.name}: ${f.error}`).join('<br>'),
-							indicator: 'red'
-						});
-					}
-
-					if (failed.length === 0 && this.dialog) {
-						this.dialog.hide();
-					}
-
-				} catch (error) {
-					frappe.msgprint({
-						title: __('Upload Failed'),
-						message: error.message || __('An error occurred during upload'),
-						indicator: 'red'
-					});
-					console.error('Direct upload error:', error);
-				}
+			.text(__('Direct Upload'))
+			.on('click', () => {
+				this.direct_upload_files();
 			});
 
 		this.dialog.$wrapper.find('.standard-actions').append($custom_button);
