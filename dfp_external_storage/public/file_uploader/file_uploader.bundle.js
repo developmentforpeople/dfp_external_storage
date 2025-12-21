@@ -163,7 +163,7 @@ class FileUploader {
 					file.failed = false;
 					file.request_succeeded = false;
 					file.error_message = null;
-
+					
 					const presigned = await frappe.call({
 						method: "dfp_external_storage.api.generate_presigned_url",
 						args: {
@@ -267,48 +267,6 @@ class FileUploader {
 					}, 5);
 				}
 			}
-
-			if (this.frm && this.docname) {
-				const latest_doc = await frappe.call({
-					method: "frappe.client.get",
-					args: {
-						doctype: this.doctype,
-						name: this.docname
-					}
-				});
-
-				if (latest_doc && latest_doc.message) {
-					this.frm.doc.modified = latest_doc.message.modified;
-					this.frm.doc.modified_by = latest_doc.message.modified_by;
-
-					if (this.frm.doc.__last_sync_on) {
-						this.frm.doc.__last_sync_on = latest_doc.message.modified;
-					}
-
-					if (initialFormData) {
-						const formFields = this.frm.fields_dict;
-						for (let fieldname in formFields) {
-							const field = formFields[fieldname];
-							if (field.df && field.df.fieldtype !== 'Table' &&
-								initialFormData[fieldname] !== this.frm.doc[fieldname] &&
-								latest_doc.message[fieldname] === initialFormData[fieldname]) {
-
-							}
-						}
-					}
-
-					if (latest_doc.message.attachments) {
-						this.frm.doc.attachments = latest_doc.message.attachments;
-					}
-
-					if (this.frm.attachments) {
-						this.frm.attachments.refresh();
-					}
-
-					console.log("Form timestamp synced after upload");
-				}
-			}
-
 			const allSuccessful = files.every(f => f.request_succeeded);
 			const anySuccessful = files.some(f => f.request_succeeded);
 
