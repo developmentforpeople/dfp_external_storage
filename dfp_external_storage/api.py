@@ -56,19 +56,13 @@ def create_file_record(
             **kwargs,
         }
     )
-
+    file_doc.update_modified= False
+    file_doc.flags.ignore_links = 1
     file_doc.insert(ignore_permissions=True)
 
     file_url = f"/file/{file_doc.name}/{file_name}"
     file_doc.update({"file_url": file_url})
     file_doc.save(ignore_permissions=True)
-
-    if attached_to_doctype and attached_to_name and attached_to_field:
-        parent_doc = frappe.get_doc(attached_to_doctype, attached_to_name)
-        parent_doc.update({attached_to_field: file_url})
-        parent_doc.save(ignore_permissions=True)
-
-
     return {"file_doc": file_doc, "file_url": file_url}
 
 
