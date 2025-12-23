@@ -16,8 +16,10 @@
   "secure",
   "bucket_name",
   "region",
+  "auth_type",
   "access_key",
   "secret_key",
+  "session_token",
   "folders",
   "files_within",
   "advanced_settings_section",
@@ -44,24 +46,6 @@
    "reqd": 1
   },
   {
-   "description": "Access key (aka user ID) of your account in S3 service.",
-   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
-   "fieldname": "access_key",
-   "fieldtype": "Data",
-   "in_list_view": 1,
-   "label": "Access Key",
-   "reqd": 1
-  },
-  {
-   "description": "Secret Key (aka password) of your account in S3 service.",
-   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
-   "fieldname": "secret_key",
-   "fieldtype": "Password",
-   "label": "Secret Key",
-   "no_copy": 1,
-   "reqd": 1
-  },
-  {
    "default": "auto",
    "description": "Region name of buckets in S3 service. Default value: \"auto\".",
    "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
@@ -69,6 +53,44 @@
    "fieldtype": "Data",
    "label": "Region",
    "reqd": 1
+  },
+  {
+   "default": "Key based",
+   "description": "Authentication method to use. 'Key based' requires Access Key and Secret Key. You can also optionally provide session token if you have short-lived credentials. 'Aws Iam' to use AWS IAM credentials (e.g., from AWS credentials file or IAM role).",
+   "fieldname": "auth_type",
+   "fieldtype": "Select",
+   "label": "Authentication Type",
+   "options": "Key based\nAws Iam",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.auth_type == 'Key based'",
+   "description": "Access key (aka user ID) of your account in S3 service.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
+   "fieldname": "access_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Access Key"
+  },
+  {
+   "depends_on": "eval:doc.auth_type == 'Key based'",
+   "description": "Secret Key (aka password) of your account in S3 service.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
+   "fieldname": "secret_key",
+   "fieldtype": "Password",
+   "label": "Secret Key",
+   "no_copy": 1
+  },
+  {
+   "depends_on": "eval:doc.auth_type == 'Key based'",
+   "description": "Session token of your account in S3 service.",
+   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
+   "fieldname": "session_token",
+   "fieldtype": "Password",
+   "label": "Session Token",
+   "length": 2000,
+   "reqd": 0,
+   "no_copy": 1
   },
   {
    "description": "<strong>Be careful!</strong> Please set up your bucket as private in your provider and/or remove public access to objects. <strong>Some files you upload to Frappe will be for sure private!</strong>",

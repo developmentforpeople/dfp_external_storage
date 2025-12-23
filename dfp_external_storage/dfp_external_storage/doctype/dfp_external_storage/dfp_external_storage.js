@@ -5,7 +5,20 @@ frappe.ui.form.on('DFP External Storage', {
 		frm.button_remote_files_list = null
 	},
 
+	auth_type: function(frm) {
+		// Toggle visibility of credential fields based on auth type
+		frm.toggle_reqd('access_key', frm.doc.auth_type === 'Key based')
+		frm.toggle_reqd('secret_key', frm.doc.auth_type === 'Key based')
+		frm.refresh_field('access_key')
+		frm.refresh_field('secret_key')
+	},
+
 	refresh: function(frm) {
+		// Set initial required state based on auth_type
+		if (frm.doc.auth_type) {
+			frm.toggle_reqd('access_key', frm.doc.auth_type === 'Key based')
+			frm.toggle_reqd('secret_key', frm.doc.auth_type === 'Key based')
+		}
 		if (frm.is_new() && !frm.doc.doctypes_ignored.length) {
 			frm.doc.doctypes_ignored.push({doctype_to_ignore: 'Data Import'})
 			frm.doc.doctypes_ignored.push({doctype_to_ignore: 'Prepared Report'})
