@@ -1,7 +1,7 @@
 # DFP External Storage
 
 > **😊 Thanks!**
-> 
+>
 > If you find this code useful, please help me (https://github.com/sponsors/developmentforpeople) to keep it updated, improved and safe. Thank you very very much for your help 🫶!
 
 Simplest cloud file management for Frappe / ERPNext. S3 compatible external bucket can be assigned per Frappe folder, allowing you to fine-tune the location of your Frappe / ERPNext "File"s: within local filesystem or to exteral S3 bucket.
@@ -42,11 +42,9 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 
 ![Settings](https://github.com/developmentforpeople/dfp_external_storage/assets/47140294/0ad2f24b-d37d-4882-80c4-c1e77a74f666)
 
-
 ## Requirements
 
-- Frappe version >= 14
-
+- Frappe version >= 14 (Try to use last version: 15)
 
 ## Functionalities
 
@@ -60,49 +58,46 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 - Choosed S3 bucket file listing tool.
 - S3 bucket can not be deleted if has "File"s assigned / within it.
 - If bucket is not accesible file will be uploaded to local filesystem.
-- Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran)
+- Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran))
 - List all remote objects in bucket (includes too the ones not uploaded trough Frappe)
 - Support for S3 / Minio presigned urls: allowing video streaming capabilities and other S3 functionalities.
 - Presigned url can be used for all files in defined folders but defined by mimetype.
 - Files are now streamed by default.
 - Extended settings per External Storage doc:
-	- Cache only files smaller than
-	- Cache for x seconds
-	- Stream buffer size
-	- Presigned url activation
-	- Presigned url only for mimetypes defined
-	- Presigned url expiration
-	- Use S3 file size instead of saved on Frappe File (needed for files > 2GB)
+  - Cache only files smaller than
+  - Cache for x seconds
+  - Stream buffer size
+  - Presigned url activation
+  - Presigned url only for mimetypes defined
+  - Presigned url expiration
+  - Use S3 file size instead of saved on Frappe File (needed for files > 2GB)
 - ... maybe I am forgetting something ;)
-
 
 ### Flow options
 
 - No S3 external storages defined
 - or S3 external storages defined but not assigned to folders:
-	- All uploaded files are saved in local filesystem
+  - All uploaded files are saved in local filesystem
 - One S3 external storage assigned to "Attachments" folder:
-	- Only files uploaded to that folder will be use that S3 bucket
+  - Only files uploaded to that folder will be use that S3 bucket
 - One S3 external storage assigned to "Home" folder:
-	- All files uploaded to Frappe will be located within that bucket. Except the files uploaded to "Attachments" that will use the above defined bucket
-
+  - All files uploaded to Frappe will be located within that bucket. Except the files uploaded to "Attachments" that will use the above defined bucket
 
 ### File actions available
 
 - If a "File" has an "DFP External Storage" assigned.
-	- If changed to a different "DFP External Storage" file will be:
-		- "downloaded" from previous bucket > "uploaded" to new bucket > "deleted" from previous bucket.
-	- If leaved empty, file will be "downloaded" to local filesystem > "deleted" from bucket.
+  - If changed to a different "DFP External Storage" file will be:
+    - "downloaded" from previous bucket > "uploaded" to new bucket > "deleted" from previous bucket.
+  - If leaved empty, file will be "downloaded" to local filesystem > "deleted" from bucket.
 - If a "File" has no "DFP External Storage" assigned, so it is in local filesystem:
-	- If assigned a "DFP External Storage", file will be:
-		- "uploaded" to that bucket > "deleted" from filesystem
-
+  - If assigned a "DFP External Storage", file will be:
+    - "uploaded" to that bucket > "deleted" from filesystem
 
 ## Setup or try it locally
 
-### Install Frappe 14
-Follow all steps for your OS within official guide: [https://frappeframework.com/docs/v14/user/en/installation](https://frappeframework.com/docs/v14/user/en/installation).
+### Install Frappe 15
 
+Follow all steps for your OS within official guide: [https://docs.frappe.io/framework/v15/user/en/installation](https://docs.frappe.io/framework/v15/user/en/installation).
 
 ### Create your personal "frappe-bench" environment (customizable folder name)
 
@@ -113,22 +108,27 @@ cd ~
 bench init frappe-bench
 ```
 
-
 ### Install "dfp_external_storage" app
 
 ```
 cd ~/frappe-bench
-bench get-app git@github.com:developmentforpeople/dfp_external_storage.git
+# Version 15: recommended
+bench get-app --branch version-15 git@github.com:developmentforpeople/dfp_external_storage.git
+# Version 14: deprecated
+bench get-app --branch version-14 git@github.com:developmentforpeople/dfp_external_storage.git
+# Not stable but with latest features (for testing or developing)
+bench get-app --branch develop git@github.com:developmentforpeople/dfp_external_storage.git
 ```
-
 
 ### Create a new site with "dfp_external_storage" app installed on it
 
 ```
 cd ~/frappe-bench
-bench new-site dfp_external_storage_site.localhost --install-app dfp_external_storage
-```
+bench new-site site_name.localhost --install-app dfp_external_storage
 
+# If you need to delete site to recreate it (Be careful! all data will be lost, only for testing!):
+bench drop-site --no-backup --force site_name.localhost
+```
 
 ### Initialize servers to get site running
 
@@ -148,6 +148,7 @@ You can select a different folder and only those files will be uploaded, or sele
 Option is valuable when working with large files.
 
 For uploading content from a local file, usage would look like:
+
 ```
 file_doc = frappe.get_doc({
     "doctype":"File",
@@ -159,12 +160,14 @@ file_doc.save()
 ```
 
 To download content to a local file:
+
 ```
 file_doc = frappe.get_doc("File",doc_name)
 file_doc.dfp-external_storage_download_to_file("/path/to/local/file")
 ```
 
 To read remote file directly via a proxy object:
+
 ```
 file_doc = frappe.get_doc("File",doc_name)
 
@@ -175,25 +178,34 @@ with zipfile.ZipFile(file_doc.dfp_external_storage_file_proxy()) as z:
 
 ```
 
+### Uninstall "dfp_external_storage" app
+
+- [Frappe Docs: Uninstall app](https://docs.frappe.io/framework/v15/user/en/bench/reference/uninstall-app)
+- [Frappe Docs: Bench cheatsheet](https://docs.frappe.io/framework/v15/user/en/bench/resources/bench-commands-cheatsheet)
+
+```bash
+# First uninstall app from site:
+bench --site {site} uninstall-app {app} --no-backup
+# Then remove app from bench:
+bench remove-app {app}
+```
+
 ## Pending
 
 - Make tests:
-	- Create DFP External Storage
-	- Upload file to bucket
-	- Read bucket file
-	- Relocate bucket file
-	- Delete bucket file
-
+  - Create DFP External Storage
+  - Upload file to bucket
+  - Read bucket file
+  - Relocate bucket file
+  - Delete bucket file
 
 ## Contributing
 
 1. [Code of Conduct](CODE_OF_CONDUCT.md)
 
-
 ## Attributions
 
 - cloud storage by Iconstock from [Noun Project](https://thenounproject.com/browse/icons/term/cloud-storage/)
-
 
 #### License
 

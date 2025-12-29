@@ -58,7 +58,7 @@ class S3FileProxy:
 
 	def tell(self):
 		return self.offset
-	
+
 	def read(self, size=0):
 		content = self.readFn(self.offset, size)
 		self.offset = self.offset + len(content)
@@ -144,37 +144,39 @@ class DFPExternalStorage(Document):
 				pass
 		
 		# Handle Key based authentication
-		if self.access_key and self.secret_key:
-			try:
-				if self.is_new() and self.secret_key:
-					key_secret = self.secret_key
-				else:
-					key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key")
-				
-				# session_token is optional, so handle the case where it might not exist
-				session_token = None
-				if self.is_new() and self.session_token:
-					session_token = self.session_token
-				else:
-					try:
-						session_token = get_decrypted_password("DFP External Storage", self.name, "session_token")
-					except:
-						# session_token is optional, so it's okay if it doesn't exist
-						session_token = None
-				
-				if key_secret:
-					credentials = StaticProvider(
-						access_key=self.access_key,
-						secret_key=key_secret,
-						session_token=session_token,
-					)
-					return MinioConnection(
-						endpoint=self.endpoint,
-						credentials=credentials,
-						region=self.region,
-					)
-			except:
-				pass
+		# Allow access_key/secret_key to be optional: if not provided in this DocType,
+		# fallback to environment variables.
+		try:
+			# Resolve access key
+			access_key = self.access_key or \
+				os.getenv("AWS_ACCESS_KEY_ID") or \
+				os.getenv("MINIO_ACCESS_KEY") or \
+				os.getenv("MINIO_ROOT_USER")
+
+			# Resolve secret key
+			if self.is_new() and self.secret_key:
+				key_secret = self.secret_key
+			elif self.secret_key:
+				key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key") if self.name else None
+			else:
+				key_secret = None
+			
+			secret_key = key_secret or \
+				os.getenv("AWS_SECRET_ACCESS_KEY") or \
+				os.getenv("MINIO_SECRET_KEY") or \
+				os.getenv("MINIO_ROOT_PASSWORD")
+			
+			credentials = StaticProvider(
+				access_key=access_key,
+				secret_key=secret_key,
+			)
+			return MinioConnection(
+				endpoint=self.endpoint,
+				credentials=credentials,
+				region=self.region,
+			)
+		except Exception:
+			pass
 		
 		return None
 
@@ -729,11 +731,14 @@ def file(name:str, file:str):
 	if not response_values:
 		try:
 			doc = frappe.get_doc("File", name)
-			if not doc or not doc.is_downloadable() or doc.file_name != file:
-				raise Exception("File not available")
-		except Exception:
-			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
+		except frappe.DoesNotExistError:
 			raise frappe.PageDoesNotExistError()
+
+		if doc.file_name != file:
+			raise frappe.PageDoesNotExistError()
+
+		if not doc.is_downloadable():
+			raise frappe.PermissionError()
 
 		response_values = {}
 		response_values["headers"] = []

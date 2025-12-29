@@ -19,7 +19,6 @@
   "auth_type",
   "access_key",
   "secret_key",
-  "session_token",
   "folders",
   "files_within",
   "advanced_settings_section",
@@ -65,7 +64,7 @@
   },
   {
    "depends_on": "eval:doc.auth_type == 'Key based'",
-   "description": "Access key (aka user ID) of your account in S3 service.",
+   "description": "Access key (aka user ID) of your account in S3 service. If empty, will use environment variables (AWS_ACCESS_KEY_ID or MINIO_ACCESS_KEY or MINIO_ROOT_USER).",
    "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "access_key",
    "fieldtype": "Data",
@@ -74,22 +73,11 @@
   },
   {
    "depends_on": "eval:doc.auth_type == 'Key based'",
-   "description": "Secret Key (aka password) of your account in S3 service.",
+   "description": "Secret Key (aka password) of your account in S3 service. If empty, will use environment variables (AWS_SECRET_ACCESS_KEY or MINIO_SECRET_KEY or MINIO_ROOT_PASSWORD).",
    "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "secret_key",
    "fieldtype": "Password",
    "label": "Secret Key",
-   "no_copy": 1
-  },
-  {
-   "depends_on": "eval:doc.auth_type == 'Key based'",
-   "description": "Session token of your account in S3 service.",
-   "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
-   "fieldname": "session_token",
-   "fieldtype": "Password",
-   "label": "Session Token",
-   "length": 2000,
-   "reqd": 0,
    "no_copy": 1
   },
   {
@@ -108,7 +96,7 @@
   {
    "fieldname": "html_1",
    "fieldtype": "HTML",
-   "options": "<p>Used Minio library (Simple Storage Service or S3) client to perform bucket and object operations), so please refer to it class initialization for more info:</p>\n<ul>\n<li><strong>endpoint</strong>: Hostname of a S3 service.</li>\n<li><strong>access_key</strong>: Access key (aka user ID) of your account in S3 service.</li>\n<li><strong>secret_key</strong>: Secret Key (aka password) of your account in S3 service.</li>\n<li><strong>session_token</strong>: Session token of your account in S3 service.</li>\n<li><strong>secure</strong>: Flag to indicate to use secure (TLS) connection to S3 service or not.</li>\n</ul>"
+   "options": "<p>Used Minio library (Simple Storage Service or S3) client to perform bucket and object operations), so please refer to it class initialization for more info:</p>\n<ul>\n<li><strong>endpoint</strong>: Hostname of a S3 service.</li>\n<li><strong>access_key</strong>: Access key (aka user ID) of your account in S3 service.</li>\n<li><strong>secret_key</strong>: Secret Key (aka password) of your account in S3 service.</li>\n<li><strong>secure</strong>: Flag to indicate to use secure (TLS) connection to S3 service or not.</li>\n</ul>"
   },
   {
    "description": "Only host and port. For example:\n<ul><li>[id].r2.cloudflarestorage.com:443</li><li>s3.amazonaws.com</li><li>minio:9000</li><li>...</li></ul>\nRead <a href=\"https://min.io/docs/minio/linux/developers/python/API.html\" target=\"_blank\">Minio documentation</a> for more info.",
