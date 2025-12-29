@@ -139,6 +139,7 @@ class DFPExternalStorage(Document):
 						endpoint=self.endpoint,
 						credentials=credentials,
 						region=self.region,
+						secure=self.secure,
 					)
 			except:
 				pass
@@ -174,6 +175,7 @@ class DFPExternalStorage(Document):
 				endpoint=self.endpoint,
 				credentials=credentials,
 				region=self.region,
+				secure=self.secure,
 			)
 		except Exception:
 			pass
@@ -185,11 +187,12 @@ class DFPExternalStorage(Document):
 
 
 class MinioConnection:
-	def __init__(self, endpoint:str, region:str, credentials:StaticProvider | IamAwsProvider):
+	def __init__(self, endpoint:str, region:str, credentials:StaticProvider | IamAwsProvider, secure:bool):
 		self.client = Minio(
 			endpoint=endpoint,
 			region=region,
-			credentials=credentials
+			credentials=credentials,
+			secure=secure,
 		)
 
 	def validate_bucket(self, bucket_name:str):
