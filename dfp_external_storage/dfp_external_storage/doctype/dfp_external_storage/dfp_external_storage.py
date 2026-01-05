@@ -755,3 +755,27 @@ def file(name:str, file:str):
 		return Response(**response_values)
 
 	raise frappe.PageDoesNotExistError()
+
+
+@frappe.whitelist()
+def get_assigned_folders(exclude_storage=None):
+	"""
+	Get list of folders already assigned to any DFP External Storage.
+	This is used to filter out already assigned folders when selecting folders for a storage.
+	
+	Args:
+		exclude_storage: Optional storage name to exclude from the query
+	
+	Returns:
+		List of folder names that are already assigned to other storages
+	"""
+	filters = {}
+	if exclude_storage:
+		filters["parent"] = ["!=", exclude_storage]
+	
+	assigned_folders = frappe.get_all(
+		"DFP External Storage by Folder",
+		filters=filters,
+		pluck="folder"
+	)
+	return assigned_folders

@@ -28,23 +28,24 @@ frappe.ui.form.on('DFP External Storage', {
 			}
 		})
 
-		frappe.db.get_list(
-			'DFP External Storage by Folder',
-			{fields: ['name','folder']}
-		).then(data => {
-			if (data && data.length) {
-				let folders_name_not_assigned = data
-					.filter(d => d.name != frm.doc.name ? d : null)
-					.map(d => d.folder)
-				frm.set_query('folders', function () {
-					return {
-						filters: {
-							is_folder: 1,
-							name: ['not in', folders_name_not_assigned],
-						},
-					}
-				})
-
+		// Fix: Query parent DocType instead of child table to get assigned folders
+		// Child DocTypes (istable=1) cannot be queried directly via frappe.db.get_list
+		frappe.call({
+			method: 'dfp_external_storage.dfp_external_storage.doctype.dfp_external_storage.dfp_external_storage.get_assigned_folders',
+			args: {
+				exclude_storage: frm.doc.name || ''
+			},
+			callback: function(r) {
+				if (r.message && r.message.length) {
+					frm.set_query('folders', function () {
+						return {
+							filters: {
+								is_folder: 1,
+								name: ['not in', r.message],
+							},
+						}
+					})
+				}
 			}
 		})
 
