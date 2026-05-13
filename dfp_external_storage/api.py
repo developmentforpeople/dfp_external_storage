@@ -10,7 +10,9 @@ def generate_presigned_url(file_name, file_path="Record"):
         frappe.throw(_("Write disabled for connection"))
 
     if not storage_doc.allow_direct_upload:
-        frappe.throw(_("Direct Upload must be enabled before you can use this feature."))
+        frappe.throw(
+            _("Direct Upload must be enabled before you can use this feature.")
+        )
 
     s3_key = f"uploads/{file_path}/{file_name}"
     put_url = storage_doc.client.presigned_put_object(
@@ -28,6 +30,7 @@ def generate_presigned_url(file_name, file_path="Record"):
         "s3_key": s3_key,
     }
 
+
 @frappe.whitelist()
 def create_file_record(
     file_name,
@@ -38,7 +41,6 @@ def create_file_record(
     attached_to_field=None,
     is_private=1,
     folder="Home",
-    **kwargs,
 ):
     storage_name = _get_storage().name
     file_doc = frappe.get_doc(
@@ -53,10 +55,9 @@ def create_file_record(
             "attached_to_field": attached_to_field,
             "folder": folder,
             "is_private": is_private,
-            **kwargs,
         }
     )
-    file_doc.update_modified= False
+    file_doc.update_modified = False
     file_doc.flags.ignore_links = 1
     file_doc.insert(ignore_permissions=True)
 
@@ -67,10 +68,9 @@ def create_file_record(
 
 
 def _get_storage():
-    storage_docs = frappe.db.get_all("DFP External Storage", filters={
-			"allow_direct_upload": True,
-            "enabled": True
-		})
+    storage_docs = frappe.db.get_all(
+        "DFP External Storage", filters={"allow_direct_upload": True, "enabled": True}
+    )
     if not storage_docs:
         frappe.throw(_("No Bucket With Direct Upload Found"))
     elif len(storage_docs) > 1:
