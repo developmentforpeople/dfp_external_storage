@@ -45,22 +45,20 @@
    "reqd": 1
   },
   {
-   "description": "Access key (aka user ID) of your account in S3 service.",
+   "description": "Access key (aka user ID) of your account in S3 service. If empty, will use environment variables (AWS_ACCESS_KEY_ID or MINIO_ACCESS_KEY or MINIO_ROOT_USER).",
    "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "access_key",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Access Key",
-   "reqd": 1
+   "label": "Access Key"
   },
   {
-   "description": "Secret Key (aka password) of your account in S3 service.",
+   "description": "Secret Key (aka password) of your account in S3 service. If empty, will use environment variables (AWS_SECRET_ACCESS_KEY or MINIO_SECRET_KEY or MINIO_ROOT_PASSWORD).",
    "documentation_url": "https://min.io/docs/minio/linux/developers/python/API.html",
    "fieldname": "secret_key",
    "fieldtype": "Password",
    "label": "Secret Key",
-   "no_copy": 1,
-   "reqd": 1
+   "no_copy": 1
   },
   {
    "default": "auto",

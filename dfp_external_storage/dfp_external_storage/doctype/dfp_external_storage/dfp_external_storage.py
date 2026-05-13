@@ -143,21 +143,38 @@ class DFPExternalStorage(Document):
 
 	@cached_property
 	def client(self):
-		if self.endpoint and self.access_key and self.secret_key and self.region:
+		# Allow access_key/secret_key to be optional: if not provided in this DocType,
+		# fallback to environment variables.
+		if self.endpoint and self.region:
 			try:
+				# Resolve access key
+				access_key = self.access_key or \
+					os.getenv("AWS_ACCESS_KEY_ID") or \
+					os.getenv("MINIO_ACCESS_KEY") or \
+					os.getenv("MINIO_ROOT_USER")
+
+				# Resolve secret key
 				if self.is_new() and self.secret_key:
 					key_secret = self.secret_key
+				elif self.secret_key:
+					key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key") if self.name else None
 				else:
-					key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key")
-				if key_secret:
+					key_secret = None
+
+				secret_key = key_secret or \
+					os.getenv("AWS_SECRET_ACCESS_KEY") or \
+					os.getenv("MINIO_SECRET_KEY") or \
+					os.getenv("MINIO_ROOT_PASSWORD")
+
+				if access_key and secret_key:
 					return MinioConnection(
 						endpoint=self.endpoint,
-						access_key=self.access_key,
-						secret_key=key_secret,
+						access_key=access_key,
+						secret_key=secret_key,
 						region=self.region,
 						secure=self.secure,
 					)
-			except:
+			except Exception:
 				pass
 
 	def remote_files_list(self):
@@ -742,11 +759,14 @@ def file(name:str, file:str):
 	if not response_values:
 		try:
 			doc = frappe.get_doc("File", name)
-			if not doc or not doc.is_downloadable() or doc.file_name != file:
-				raise Exception("File not available")
-		except Exception:
-			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
+		except frappe.DoesNotExistError:
 			raise frappe.PageDoesNotExistError()
+
+		if doc.file_name != file:
+			raise frappe.PageDoesNotExistError()
+
+		if not doc.is_downloadable():
+			raise frappe.PermissionError()
 
 		response_values = {}
 		response_values["headers"] = []

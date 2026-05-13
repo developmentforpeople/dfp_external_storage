@@ -1,14 +1,14 @@
 [project]
 name = "dfp_external_storage"
 authors = [
-    { name = "DevelopmentForPeople", email = "developmentforpeople@gmail.com"}
+  { name = "DevelopmentForPeople", email = "developmentforpeople@gmail.com"}
 ]
 description = "S3 compatible external storage for Frappe and ERPNext"
 requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=15.0.0" # Installed and managed by bench.
+    "minio"
 ]
 
 [build-system]
