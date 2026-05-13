@@ -94,7 +94,46 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 - If a "File" has no "DFP External Storage" assigned, so it is in local filesystem:
   - If assigned a "DFP External Storage", file will be:
     - "uploaded" to that bucket > "deleted" from filesystem
+## Direct Upload
+Direct Upload allows users to upload files directly to the storage provider without passing through Frappe Cloud or being saved on the Frappe server.
+This approach is especially useful for large file uploads, as it reduces server load and improves performance.
+### How to make it work
+A Direct Upload button is added to the file upload interface
 
+####  You only need to:
+
+- Create a new storage configuration
+
+- Enable the required options
+
+- Check Direct Upload in the Advanced Settings
+
+No additional backend customization is required.
+### limitations
+Only one Direct Upload storage can be enabled at a time
+### constrations
+- The storage must support presigned URLs
+
+- Direct Upload must be explicitly enabled in the storage configuration
+
+- Files uploaded via Direct Upload bypass the Frappe server entirely
+### how to example from a client library, full flow
+Call the API to generate a presigned URL:
+
+```dfp_external_storage.api.generate_presigned_url```
+
+
+####  Parameters:
+
+- filename: Name of the file
+
+- filepath: Target path in the storage
+
+The API returns a presigned URL
+
+Upload the file directly to the storage using the returned presigned URL
+
+This completes the upload without the file ever reaching the Frappe server.
 ####  You only need to:
 
 ### Install Frappe 15
