@@ -1,18 +1,29 @@
 function patch_file_uploader(FileUploaderClass) {
     const original_make_dialog = FileUploaderClass.prototype.make_dialog;
 
-    FileUploaderClass.prototype.make_dialog = function (title) {
-        original_make_dialog.call(this, title);
+    const PatchedClass = function (options = {}) {
+        const instance = Reflect.construct(FileUploaderClass, [options], PatchedClass);
+        instance.doctype = options.doctype;
+        instance.docname = options.docname;
+        instance.fieldname = options.fieldname;
+        instance.frm = options.frm;
+        instance.folder = options.folder || "Home";
+        instance.on_success = options.on_success;
+        return instance;
+    };
+    PatchedClass.prototype = Object.create(FileUploaderClass.prototype);
+    PatchedClass.prototype.constructor = PatchedClass;
 
-        const self = this;
+    PatchedClass.prototype.make_dialog = function (title) {
+        original_make_dialog.call(this, title);
         $("<button>")
             .addClass("btn btn-primary btn-sm")
             .text("Direct Upload")
-            .on("click", () => self.direct_upload_files())
+            .on("click", () => this.direct_upload_files())
             .appendTo(this.dialog.footer.find(".standard-actions"));
     };
 
-    FileUploaderClass.prototype.direct_upload_files = async function () {
+    PatchedClass.prototype.direct_upload_files = async function () {
         const files = this.uploader?.files || [];
         if (!files.length) { frappe.msgprint(__("Please select files to upload")); return; }
 
@@ -35,7 +46,7 @@ function patch_file_uploader(FileUploaderClass) {
         this._set_dialog_buttons_disabled(false);
     };
 
-    FileUploaderClass.prototype._direct_upload_single = async function (file, sessionId) {
+    PatchedClass.prototype._direct_upload_single = async function (file, sessionId) {
         Object.assign(file, { uploading: true, progress: 0, total: file.file_obj.size, failed: false, request_succeeded: false, error_message: null });
 
         const presigned = await frappe.call({
@@ -67,15 +78,21 @@ function patch_file_uploader(FileUploaderClass) {
         const file_doc = fileDocResponse.message;
         file.request_succeeded = true;
         file.doc = file_doc;
+
         this.on_success?.(file_doc, { message: file_doc });
 
-        if (this.frm && !this.fieldname && file_doc) { this.frm.attachments.update_attachment(file_doc); this.frm.refresh(); }
+        if (this.frm && !this.fieldname && file_doc) {
+            this.frm.attachments.update_attachment(file_doc);
+            this.frm.refresh_field(this.fieldname);
+            this.frm.refresh();
+        }
+
         if (this.frm && this.fieldname && file_doc?.file_url) {
             this.frm.get_field(this.fieldname)?.parse_validate_and_set_in_model(file_doc.file_url);
         }
     };
 
-    FileUploaderClass.prototype._xhr_put = function (url, file) {
+    PatchedClass.prototype._xhr_put = function (url, file) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.upload.addEventListener("progress", (e) => { if (e.lengthComputable) { file.progress = e.loaded; file.total = e.total; } });
@@ -92,23 +109,23 @@ function patch_file_uploader(FileUploaderClass) {
         });
     };
 
-    FileUploaderClass.prototype._set_dialog_buttons_disabled = function (disabled) {
+    PatchedClass.prototype._set_dialog_buttons_disabled = function (disabled) {
         if (!this.dialog) return;
         this.dialog.get_primary_btn().prop("disabled", disabled);
         this.dialog.get_secondary_btn().prop("disabled", disabled);
     };
+
+    return PatchedClass;
 }
 
-// Use a setter trap — fires the moment Frappe assigns FileUploader
 frappe.provide("frappe.ui");
 let _fileUploaderValue = frappe.ui.FileUploader;
 
 Object.defineProperty(frappe.ui, "FileUploader", {
     get() { return _fileUploaderValue; },
     set(cls) {
-        _fileUploaderValue = cls;
         if (cls) {
-            patch_file_uploader(cls);
+            _fileUploaderValue = patch_file_uploader(cls);
         }
     },
     configurable: true,
