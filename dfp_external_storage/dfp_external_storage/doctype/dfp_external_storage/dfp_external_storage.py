@@ -89,6 +89,25 @@ class DFPExternalStorage(Document):
 				frappe.msgprint(_("There are {} files using this bucket. The field you just updated is critical, be careful!").format(self.files_within))
 		if not previous or has_changed(self, previous, DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS):
 			self.validate_bucket()
+		if not previous or has_changed(self, previous, ["allow_direct_upload", "enabled"]):
+			self.validate_one_direct_upload()
+
+	def validate_one_direct_upload(self):
+		previous = self.get_doc_before_save()
+		count = 0
+		if not self.allow_direct_upload and not self.enabled:
+			return
+		if not previous and self.allow_direct_upload and self.enabled:
+			count += 1
+
+		allowed = frappe.db.get_all(self.doctype, filters={
+			"allow_direct_upload": True,
+			"enabled": True,
+		})
+		count += len(allowed)
+		if count > 1:
+			frappe.throw(_("You can't have more than one directupload bucket"))
+
 
 	def on_trash(self):
 		if self.files_within:
@@ -307,6 +326,35 @@ class MinioConnection:
 		"""
 		return self.client.list_objects(bucket_name=bucket_name, recursive=recursive)
 
+	def presigned_put_object(
+			self,
+			bucket_name: str,
+			object_name: str,
+			expires: timedelta = timedelta(days=7),
+	) -> str:
+		"""
+		Get presigned URL of an object to upload data with expiry time and
+		custom request parameters.
+
+		:param bucket_name: Name of the bucket.
+		:param object_name: Object name in the bucket.
+		:param expires: Expiry in seconds; defaults to 7 days.
+		:return: URL string.
+
+		Example::
+			# Get presigned URL string to upload data to 'my-object' in
+			# 'my-bucket' with default expiry (i.e. 7 days).
+			url = client.presigned_put_object("my-bucket", "my-object")
+			print(url)
+
+			# Get presigned URL string to upload data to 'my-object' in
+			# 'my-bucket' with two hours expiry.
+			url = client.presigned_put_object(
+				"my-bucket", "my-object", expires=timedelta(hours=2),
+			)
+			print(url)
+		"""
+		return self.client.presigned_put_object(bucket_name=bucket_name, object_name=object_name, expires=expires)
 
 class DFPExternalStorageFile(File):
 	def __init__(self, *args, **kwargs):
