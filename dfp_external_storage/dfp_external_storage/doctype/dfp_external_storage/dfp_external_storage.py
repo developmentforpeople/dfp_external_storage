@@ -15,7 +15,8 @@ from frappe.core.doctype.file.file import File
 from frappe.core.doctype.file.file import URL_PREFIXES
 from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
-
+from minio.credentials.providers import IamAwsProvider
+from minio.credentials.providers import StaticProvider
 
 DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX = "external_storage_public_file:"
 
@@ -25,9 +26,9 @@ DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD = "file"
 
 
 DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
-	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
+	"type", "endpoint", "secure", "bucket_name", "region", "auth_type", "access_key", "secret_key"]
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
-	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+	"type", "endpoint", "secure", "bucket_name", "region", "auth_type", "access_key", "secret_key", "folders"]
 
 
 class S3FileProxy:
@@ -124,51 +125,73 @@ class DFPExternalStorage(Document):
 
 	@cached_property
 	def client(self):
-		# Allow access_key/secret_key to be optional: if not provided in this DocType,
-		# fallback to environment variables.
-		if self.endpoint and self.region:
+		if not self.endpoint or not self.region:
+			return None
+		
+		# Handle IAM authentication
+		if getattr(self, 'auth_type', 'Key based') == 'Aws Iam':				
 			try:
-				# Resolve access key
-				access_key = self.access_key or \
-					os.getenv("AWS_ACCESS_KEY_ID") or \
-					os.getenv("MINIO_ACCESS_KEY") or \
-					os.getenv("MINIO_ROOT_USER")
-
-				# Resolve secret key
-				if self.is_new() and self.secret_key:
-					key_secret = self.secret_key
-				elif self.secret_key:
-					key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key") if self.name else None
-				else:
-					key_secret = None
-
-				secret_key = key_secret or \
-					os.getenv("AWS_SECRET_ACCESS_KEY") or \
-					os.getenv("MINIO_SECRET_KEY") or \
-					os.getenv("MINIO_ROOT_PASSWORD")
-
-				if access_key and secret_key:
+				credentials = IamAwsProvider(
+					region=self.region,
+				)
+				if credentials:
 					return MinioConnection(
 						endpoint=self.endpoint,
-						access_key=access_key,
-						secret_key=secret_key,
+						credentials=credentials,
 						region=self.region,
 						secure=self.secure,
 					)
-			except Exception:
+			except:
 				pass
+		
+		# Handle Key based authentication
+		# Allow access_key/secret_key to be optional: if not provided in this DocType,
+		# fallback to environment variables.
+		try:
+			# Resolve access key
+			access_key = self.access_key or \
+				os.getenv("AWS_ACCESS_KEY_ID") or \
+				os.getenv("MINIO_ACCESS_KEY") or \
+				os.getenv("MINIO_ROOT_USER")
+
+			# Resolve secret key
+			if self.is_new() and self.secret_key:
+				key_secret = self.secret_key
+			elif self.secret_key:
+				key_secret = get_decrypted_password("DFP External Storage", self.name, "secret_key") if self.name else None
+			else:
+				key_secret = None
+			
+			secret_key = key_secret or \
+				os.getenv("AWS_SECRET_ACCESS_KEY") or \
+				os.getenv("MINIO_SECRET_KEY") or \
+				os.getenv("MINIO_ROOT_PASSWORD")
+			
+			credentials = StaticProvider(
+				access_key=access_key,
+				secret_key=secret_key,
+			)
+			return MinioConnection(
+				endpoint=self.endpoint,
+				credentials=credentials,
+				region=self.region,
+				secure=self.secure,
+			)
+		except Exception:
+			pass
+		
+		return None
 
 	def remote_files_list(self):
 		return self.client.list_objects(self.bucket_name, recursive=True)
 
 
 class MinioConnection:
-	def __init__(self, endpoint:str, access_key:str, secret_key:str, region:str, secure:bool):
+	def __init__(self, endpoint:str, region:str, credentials:StaticProvider | IamAwsProvider, secure:bool):
 		self.client = Minio(
 			endpoint=endpoint,
-			access_key=access_key,
-			secret_key=secret_key,
 			region=region,
+			credentials=credentials,
 			secure=secure,
 		)
 
