@@ -123,9 +123,13 @@ doc_events = {
 		# TODO: Remove below line after 2025.01.01
 		# "on_update": "dfp_external_storage.dfp_external_storage.doctype.dfp_external_storage.dfp_external_storage.hook_file_on_update",
 		"before_save": "dfp_external_storage.dfp_external_storage.doctype.dfp_external_storage.dfp_external_storage.hook_file_before_save",
-		"after_delete": "dfp_external_storage.dfp_external_storage.doctype.dfp_external_storage.dfp_external_storage.hook_file_after_delete",
 	}
 }
+
+delete_file_data_content = (
+	"dfp_external_storage.dfp_external_storage.doctype.dfp_external_storage."
+	"dfp_external_storage.hook_delete_file_data_content"
+)
 
 # Scheduled Tasks
 # ---------------

@@ -1,0 +1,6 @@
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+docker/.env
+docker/data

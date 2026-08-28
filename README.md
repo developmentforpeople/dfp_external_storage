@@ -1,5 +1,11 @@
 # DFP External Storage
 
+## Frappe v16 compatibility fork
+
+This branch is based on upstream commit `b519e641c06ea0779ae8359be3764e73d9afcd90` and carries a Frappe v16 compatibility and lifecycle patch. It preserves private state when ERPNext copies attachments during amendment, accepts Frappe v16's `get_content(encodings=...)` API, fails closed when S3 writes fail, and cleans up file moves at database transaction boundaries.
+
+The S3 lifecycle suite requires `DFP_TEST_S3_ENDPOINT`, `DFP_TEST_S3_ACCESS_KEY` and `DFP_TEST_S3_SECRET_KEY`. Run it on a disposable Frappe v16 site with this app installed using `bench --site <site> run-tests --app dfp_external_storage`.
+
 > **😊 Thanks!**
 >
 > If you find this code useful, please help me (https://github.com/sponsors/developmentforpeople) to keep it updated, improved and safe. Thank you very very much for your help 🫶!
@@ -44,7 +50,8 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 
 ## Requirements
 
-- Frappe version >= 14 (Try to use last version: 15)
+- Compatibility fork: Frappe v16
+- Upstream application: Frappe v14-v15
 
 ## Functionalities
 
@@ -57,7 +64,7 @@ Choose the best setup for you: S3 only for all site files or specified folders, 
 - Same file upload (same file hash) will reuse existent S3 key and is not reuploaded. Same functionality as Frappe has with local files.
 - Choosed S3 bucket file listing tool.
 - S3 bucket can not be deleted if has "File"s assigned / within it.
-- If bucket is not accesible file will be uploaded to local filesystem.
+- If a configured bucket is inaccessible, the file operation fails without silently falling back to local storage.
 - Stream data in chunks to and from S3 without reading whole files into memory (thanks to [Khoran](https://github.com/khoran))
 - List all remote objects in bucket (includes too the ones not uploaded trough Frappe)
 - Support for S3 / Minio presigned urls: allowing video streaming capabilities and other S3 functionalities.
