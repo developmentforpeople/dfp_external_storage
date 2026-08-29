@@ -31,6 +31,38 @@ class TestDFPV16Compatibility(FrappeTestCase):
 		self.assertEqual(renderer.file_id_get(), "abc123")
 		self.assertEqual(renderer.file_name_get(), "README")
 
+	def test_system_manager_can_query_multiselect_child_tables_via_parent(self):
+		user_name = f"dfp-v16-system-manager-{uuid4().hex}@example.com"
+		user = frappe.get_doc({
+			"doctype": "User",
+			"email": user_name,
+			"first_name": "DFP v16 System Manager",
+			"enabled": 1,
+			"send_welcome_email": 0,
+		}).insert(ignore_permissions=True)
+		user.add_roles("System Manager")
+
+		try:
+			frappe.set_user(user_name)
+			for doctype in (
+				"DFP External Storage by Folder",
+				"DFP External Storage Ignored Doctype",
+			):
+				self.assertTrue(frappe.has_permission(
+					doctype,
+					"select",
+					parent_doctype="DFP External Storage",
+				))
+				frappe.get_list(
+					doctype,
+					fields=["name"],
+					parent_doctype="DFP External Storage",
+					limit=1,
+				)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc("User", user_name, force=True)
+
 
 @unittest.skipUnless(
 	os.getenv("DFP_TEST_S3_ENDPOINT"),
