@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+
+FROM frappe/build:version-16@sha256:2696186f3e0ff0f61b97918e3f20b4be2132de922ca509241883351c73440b1e AS builder
+
+USER frappe
+
+COPY --chown=frappe:frappe docker/apps.test.json /opt/frappe/apps.json
+
+RUN bench init \
+		--apps_path=/opt/frappe/apps.json \
+		--frappe-branch=v16.31.0 \
+		--frappe-path=https://github.com/frappe/frappe \
+		--no-procfile \
+		--no-backups \
+		--skip-redis-config-generation \
+		--verbose \
+		/home/frappe/frappe-bench && \
+	cd /home/frappe/frappe-bench && \
+	echo '{}' > sites/common_site_config.json
+
+COPY --chown=frappe:frappe . /opt/dfp_external_storage
+
+RUN cp -a /opt/dfp_external_storage /home/frappe/frappe-bench/apps/dfp_external_storage && \
+	cd /home/frappe/frappe-bench && \
+	env/bin/pip install --no-cache-dir --editable apps/dfp_external_storage && \
+	bench build --app dfp_external_storage && \
+	find apps -mindepth 1 -path '*/.git' -prune -exec rm -rf '{}' +
+
+FROM frappe/erpnext:v16.33.0@sha256:493cecf82c92c828bf0d0c57df60694e07dc61671e374ac93a070d1cc86df1bd
+
+LABEL org.opencontainers.image.source="https://github.com/developmentforpeople/dfp_external_storage"
+LABEL org.opencontainers.image.version="1.1.3+frappe16.1"
+LABEL org.opencontainers.image.licenses="MIT"
+
+USER frappe
+
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+
+WORKDIR /home/frappe/frappe-bench
+
+RUN cp -r sites/assets assets && rm -rf sites/assets

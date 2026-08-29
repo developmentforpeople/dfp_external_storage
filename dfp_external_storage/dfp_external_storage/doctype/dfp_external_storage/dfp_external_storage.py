@@ -5,6 +5,7 @@ import io
 import mimetypes
 import typing as t
 from datetime import timedelta
+from urllib.parse import unquote
 from werkzeug.wrappers import Response
 from werkzeug.wsgi import wrap_file
 from functools import cached_property
@@ -28,6 +29,44 @@ DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key"]
 DFP_EXTERNAL_STORAGE_CRITICAL_FIELDS = [
 	"type", "endpoint", "secure", "bucket_name", "region", "access_key", "secret_key", "folders"]
+
+
+def _remove_local_file(local_file, file_url=None):
+	try:
+		if file_url and frappe.db.exists("File", {"file_url": file_url}):
+			return
+		if local_file and os.path.exists(local_file):
+			os.remove(local_file)
+	except Exception:
+		frappe.log_error(
+			title="DFP External Storage local-file cleanup failed",
+			message=f"Could not remove {local_file}",
+		)
+
+
+def _remove_remote_object(storage_doc, key, file_name):
+	try:
+		storage_doc.client.remove_object(
+			bucket_name=storage_doc.bucket_name,
+			object_name=key,
+		)
+	except Exception:
+		frappe.log_error(
+			title="DFP External Storage object cleanup failed",
+			message=f"Could not remove {key} for {file_name}",
+		)
+
+
+def _remote_object_has_other_references(storage_name, key, file_name):
+	return bool(frappe.get_all(
+		"File",
+		filters={
+			"dfp_external_storage": storage_name,
+			"dfp_external_storage_s3_key": key,
+			"name": ["!=", file_name],
+		},
+		limit=1,
+	))
 
 
 class S3FileProxy:
@@ -119,8 +158,9 @@ class DFPExternalStorage(Document):
 		return frappe.db.count("File", filters={"dfp_external_storage": self.name})
 
 	def validate_bucket(self):
-		if self.client:
-			self.client.validate_bucket(self.bucket_name)
+		if not self.client:
+			frappe.throw(_("S3 endpoint and credentials are required."))
+		self.client.validate_bucket(self.bucket_name)
 
 	@cached_property
 	def client(self):
@@ -174,17 +214,13 @@ class MinioConnection:
 
 	def validate_bucket(self, bucket_name:str):
 		try:
-			if self.client.bucket_exists(bucket_name):
-				frappe.msgprint(_("Great! Bucket is accesible ;)"), indicator="green", alert=True)
-				return True
-			else:
-				frappe.throw(_("Bucket not found"))
+			bucket_exists = self.client.bucket_exists(bucket_name)
 		except Exception as e:
-			if hasattr(e, "message"):
-				frappe.throw(_("Error when looking for bucket: {}".format(e.message)))
-			elif hasattr(e, "reason"):
-				frappe.throw(str(e))
-		return False
+			frappe.throw(_("Error when looking for bucket: {0}").format(str(e)))
+		if not bucket_exists:
+			frappe.throw(_("Bucket not found"))
+		frappe.msgprint(_("Bucket is accessible."), indicator="green", alert=True)
+		return True
 
 	def remove_object(self, bucket_name:str, object_name:str):
 		"""
@@ -312,11 +348,14 @@ class DFPExternalStorageFile(File):
 	def __init__(self, *args, **kwargs):
 		super(DFPExternalStorageFile, self).__init__(*args, **kwargs)
 
+	def before_validate(self):
+		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
+
 	@property
 	def is_remote_file(self):
 		return True if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).is_remote_file
 
-	@cached_property
+	@property
 	def dfp_external_storage_doc(self):
 		dfp_ext_strg_doc = None
 		# 1. Use defined
@@ -362,7 +401,7 @@ class DFPExternalStorageFile(File):
 				frappe.log_error(title=f"Error getting remote file size: {self.dfp_external_storage_s3_key}")
 		return self.file_size
 
-	@cached_property
+	@property
 	def dfp_external_storage_client(self):
 		if self.dfp_external_storage_doc:
 			return self.dfp_external_storage_doc.client
@@ -378,6 +417,8 @@ class DFPExternalStorageFile(File):
 		Critical fields: "dfp_external_storage_s3_key", "dfp_external_storage" and "file_url"
 		:param local_file: if given, file path for reading the content. If not given, the content field of this File is used
 		"""
+		if self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined():
+			return False
 		if self.dfp_external_storage_ignored_doctypes():
 			self.dfp_external_storage = ""
 			return False
@@ -393,71 +434,64 @@ class DFPExternalStorageFile(File):
 			raise NotImplementedError("http(s)://file(s) not ready to be saved to local or external storage(s).")
 
 		original_file_url = self.file_url
+		storage_doc = self.dfp_external_storage_doc
 
 		# Define S3 key
 		# key = f"{frappe.local.site}/{self.file_name}" # << Before 2024.03.03
 		base, extension = os.path.splitext(self.file_name)
 		key = f"{frappe.local.site}/{base}-{self.name}{extension}"
 
-		is_public = "/public" if not self.is_private else ""
 		if not local_file:
-			local_file = "./" + frappe.local.site + is_public + self.file_url
+			local_file = self.get_full_path()
 
 		try:
 			if not os.path.exists(local_file):
 				frappe.throw(_("Local file not found"))
-			with open(local_file, "rb") as f:
-				self.dfp_external_storage_client.put_object(
-					bucket_name=self.dfp_external_storage_doc.bucket_name,
+			with open(local_file, "rb") as file_handle:
+				storage_doc.client.put_object(
+					bucket_name=storage_doc.bucket_name,
 					object_name=key,
-					data=f,
+					data=file_handle,
 					length=os.path.getsize(local_file),
-					# Meta removed because same s3 file can be used within different File docs
-					# metadata={"frappe_file_id": self.name}
 				)
 
 			self.dfp_external_storage_s3_key = key
-			self.dfp_external_storage = self.dfp_external_storage_doc.name
-			self.file_url = f"/{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}/{self.name}/{self.file_name}"
-			os.remove(local_file)
+			self.dfp_external_storage = storage_doc.name
+			self.file_url = self._remote_file_local_path_get()
+
+			frappe.db.after_rollback.add(
+				lambda: _remove_remote_object(storage_doc, key, self.file_name)
+			)
+			if not self.get_doc_before_save():
+				frappe.db.after_rollback.add(lambda: _remove_local_file(local_file))
+			frappe.db.after_commit.add(
+				lambda: _remove_local_file(local_file, original_file_url)
+			)
 		except Exception as e:
 			error_msg = _("Error saving file in remote folder: {}").format(str(e))
 			frappe.log_error(f"{error_msg}: {self.file_name}", message=e)
-			# If file is new we upload to local filesystem
-			if not self.get_doc_before_save():
-				error_extra = _("File saved in local filesystem.")
-				frappe.log_error(f"{error_msg} {error_extra}: {self.file_name}")
-				self.dfp_external_storage_s3_key = ""
-				self.dfp_external_storage = ""
-				self.file_url = original_file_url
-			# If modifing existent file throw error
-			else:
-				frappe.throw(error_msg)
+			frappe.throw(error_msg)
 
 	def dfp_external_storage_delete_file(self):
 		if not self.dfp_is_s3_remote_file():
 			return
-		# Do not delete if other file docs are using same dfp_external_storage
-		# and dfp_external_storage_s3_key
-		files_using_s3_key = frappe.get_all("File", filters={
-			"dfp_external_storage_s3_key": self.dfp_external_storage_s3_key,
-			"dfp_external_storage": self.dfp_external_storage
-		})
-		if len(files_using_s3_key):
+		if _remote_object_has_other_references(
+			self.dfp_external_storage,
+			self.dfp_external_storage_s3_key,
+			self.name,
+		):
 			return
 		error_msg = _("Error deleting file in remote folder.")
-		# Only delete if connection is enabled
-		if not self.dfp_external_storage_doc or not self.dfp_external_storage_doc.enabled:
-			error_extra = _("Write disabled for connection <strong>{}</strong>").format(
-				self.dfp_external_storage_doc.title)
+		if not self.dfp_external_storage_doc:
+			frappe.throw(error_msg)
+		if not self.dfp_external_storage_doc.enabled:
+			error_extra = _("Write disabled for connection <strong>{}</strong>").format(self.dfp_external_storage_doc.title)
 			frappe.throw(f"{error_msg} {error_extra}")
-		try:
-			self.dfp_external_storage_client.remove_object(
-				bucket_name=self.dfp_external_storage_doc.bucket_name,
-				object_name=self.dfp_external_storage_s3_key)
-		except Exception as e:
-			frappe.log_error(f"{error_msg}: {self.file_name}", message=e)
-			frappe.throw(f"{error_msg} {str(e)}")
+		storage_doc = self.dfp_external_storage_doc
+		key = self.dfp_external_storage_s3_key
+		frappe.db.after_commit.add(
+			lambda: _remove_remote_object(storage_doc, key, self.file_name)
+		)
 
 	def dfp_external_storage_download_to_file(self, local_file):
 		"""
@@ -519,29 +553,46 @@ class DFPExternalStorageFile(File):
 			file=self.dfp_external_storage_file_proxy(),
 				buffer_size=self.dfp_external_storage_doc.setting_stream_buffer_size)
 
-	def download_to_local_and_remove_remote(self):
+	def download_to_local_and_remove_remote(self, target_doc=None):
+		"""Stage a remote file locally and remove S3 only after the DB commit."""
+		target_doc = target_doc or self
+		storage_doc = self.dfp_external_storage_doc
+		storage_name = self.dfp_external_storage
+		key = self.dfp_external_storage_s3_key
 		try:
-			bucket = self.dfp_external_storage_doc.bucket_name
-			key = self.dfp_external_storage_s3_key
+			with storage_doc.client.get_object(
+				bucket_name=storage_doc.bucket_name,
+				object_name=key,
+			) as response:
+				content = response.read()
 
-			self.dfp_external_storage_s3_key = ""
-			self.dfp_external_storage = ""
+			target_doc.dfp_external_storage_s3_key = ""
+			target_doc.dfp_external_storage = ""
+			target_doc.file_url = ""
+			target_doc.content = content
+			target_doc._content = content
+			target_doc.save_file_on_filesystem()
+			local_file = target_doc.get_full_path()
 
-			with self.dfp_external_storage_client.get_object(bucket_name=bucket, object_name=key) as response:
-				self._content = response.read()
-			self.save_file_on_filesystem()
-
-			self.dfp_external_storage_client.remove_object(bucket_name=bucket, object_name=key)
-		except:
+			frappe.db.after_rollback.add(lambda: _remove_local_file(local_file))
+			if not _remote_object_has_other_references(storage_name, key, self.name):
+				frappe.db.after_commit.add(
+					lambda: _remove_remote_object(storage_doc, key, self.file_name)
+				)
+		except Exception:
 			error_msg = _("Error downloading and removing file from remote folder.")
 			frappe.log_error(title=f"{error_msg}: {self.file_name}")
 			frappe.throw(error_msg)
 
 	def validate_file_on_disk(self):
-		return True if self.dfp_is_s3_remote_file() else super(DFPExternalStorageFile, self).validate_file_on_disk()
+		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
+		# The storage field is temporarily blank while moving an S3 object back
+		# to local storage. Its persisted key remains authoritative until the
+		# before-save lifecycle hook completes that move.
+		return True if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).validate_file_on_disk()
 
 	def exists_on_disk(self):
-		return False if self.dfp_is_s3_remote_file() else super(DFPExternalStorageFile, self).exists_on_disk()
+		return False if self.dfp_external_storage_s3_key else super(DFPExternalStorageFile, self).exists_on_disk()
 
 	@frappe.whitelist()
 	def optimize_file(self):
@@ -557,34 +608,45 @@ class DFPExternalStorageFile(File):
 		Set `dfp_external_storage_s3_key` if `file_url` exists and can be rendered.
 		Sometimes, when a file is copied (for example, when amending a sales invoice), we have the `file_url` but not the `key` (refer to the method `copy_attachments_from_amended_from` in `document.py`).
 		"""
-		if not self.file_url or self.is_remote_file or self.dfp_external_storage_s3_key:
-			return
-		try:
-			dfp_es_file_renderer = DFPExternalStorageFileRenderer(path=self.file_url)
-			if not dfp_es_file_renderer.can_render():
-				return
-			s3_data = frappe.get_value("File", dfp_es_file_renderer.file_id_get(), fieldname="*")
-			if s3_data:
-				self.dfp_external_storage = s3_data["dfp_external_storage"]
-				self.dfp_external_storage_s3_key = s3_data["dfp_external_storage_s3_key"]
-				self.content_hash = s3_data["content_hash"]
-				self.file_size = s3_data["file_size"]
-				# It is "duplicated" within Frappe but not in S3 😏
-				self.flags.ignore_duplicate_entry_error = True
-		except:
-			pass
+		if not self.file_url or self.dfp_external_storage_s3_key:
+			return False
 
-	def get_content(self) -> bytes:
+		renderer = DFPExternalStorageFileRenderer(path=self.file_url)
+		if not renderer.can_render():
+			return False
+		source_name = renderer.file_id_get()
+		if not source_name or source_name == self.name:
+			return False
+
+		try:
+			source = frappe.get_doc("File", source_name)
+		except frappe.DoesNotExistError:
+			return False
+		if (
+			not source.dfp_is_s3_remote_file()
+			or source.file_name != renderer.file_name_get()
+		):
+			return False
+
+		self.dfp_external_storage = source.dfp_external_storage
+		self.dfp_external_storage_s3_key = source.dfp_external_storage_s3_key
+		self.content_hash = source.content_hash
+		self.file_size = source.file_size
+		self.is_private = source.is_private
+		self.file_url = self._remote_file_local_path_get()
+		self.flags.ignore_duplicate_entry_error = True
+		return True
+
+	def get_content(self, encodings=None) -> bytes | str:
 		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
 		if not self.dfp_is_s3_remote_file():
-			return super(DFPExternalStorageFile, self).get_content()
+			return super(DFPExternalStorageFile, self).get_content(encodings=encodings)
 		try:
 			if not self.is_downloadable():
-				raise Exception("File not available")
+				raise frappe.PermissionError()
 			return self.dfp_external_storage_download_file()
 		except Exception:
-			# If no document, no read permissions, etc. For security reasons do not give any information, so just raise a 404 error
-			raise frappe.PageDoesNotExistError()
+			raise frappe.PageDoesNotExistError() from None
 
 	@cached_property
 	def dfp_mime_type_guess_by_file_name(self):
@@ -611,59 +673,51 @@ def hook_file_before_save(doc, method):
 	previous = doc.get_doc_before_save()
 
 	if not previous:
-		# NEW "File": Case 1: remote selected => upload to remote and continue "File" flow
 		doc.dfp_external_storage_upload_file()
-		return
-
-	# MODIFY "File"
-
-	# MODIFY "File": Case 1: Existent local file + new storage selected => upload to remote
-	if not doc.dfp_external_storage_s3_key and doc.dfp_external_storage and not previous.dfp_external_storage:
+	elif not doc.dfp_external_storage_s3_key and doc.dfp_external_storage and not previous.dfp_external_storage:
 		doc.dfp_external_storage_upload_file()
-
-	# MODIFY "File": Case 2: Existent remote file + no storage selected => download to local + remove from remote
 	elif previous.dfp_external_storage and not doc.dfp_external_storage:
-		previous.download_to_local_and_remove_remote()
-		doc.file_url = previous.file_url # << contains local file path downloaded
-		doc.dfp_external_storage_s3_key = ""
-
-	# MODIFY "File": Case 3: Existent remote file + new remote selected => stream from old to new remote + delete from old remote
+		previous.download_to_local_and_remove_remote(target_doc=doc)
 	elif previous.dfp_external_storage and doc.dfp_external_storage and previous.dfp_external_storage != doc.dfp_external_storage:
+		old_storage = previous.dfp_external_storage_doc
+		new_storage = doc.dfp_external_storage_doc
+		key = previous.dfp_external_storage_s3_key
 		try:
-			# MODIFY "File": Case 3.1.: new remote + not allowed doctype => download to local + remove old remote
-			# TODO: Maybe we should left in old remote?? and we should check if old remote allows the doctype??
-			if doc.dfp_external_storage_ignored_doctypes():
-				previous.download_to_local_and_remove_remote()
-				doc.file_url = previous.file_url # << contains local file path downloaded
-				doc.dfp_external_storage_s3_key = ""
-				doc.dfp_external_storage = ""
-			# MODIFY "File": Case 3.2.: new remote + allowed doctype => stream from old to new remote + delete from old remote
-			else:
-				# Get file from previous remote in chunks of 10MB (not loading it fully in memory)
+			if not new_storage or not new_storage.enabled:
+				frappe.throw(_("Destination external storage is not write enabled."))
+
+			same_location = (
+				old_storage.endpoint == new_storage.endpoint
+				and old_storage.bucket_name == new_storage.bucket_name
+				and old_storage.secure == new_storage.secure
+			)
+			if not same_location:
 				with previous.dfp_external_storage_file_proxy() as response:
-					doc.dfp_external_storage_client.put_object(
-						bucket_name=doc.dfp_external_storage_doc.bucket_name,
+					new_storage.client.put_object(
+						bucket_name=new_storage.bucket_name,
 						object_name=doc.dfp_external_storage_s3_key,
 						data=response,
 						length=response.object_size,
-						# Meta removed because same s3 file can be used within different File docs
-						# metadata={"frappe_file_id": self.name}
 					)
-				# New s3 key => update "file_url"
-				doc.file_url = doc._remote_file_local_path_get()
-				# Remove file from previous remote
-				previous.dfp_external_storage_client.remove_object(
-					bucket_name=previous.dfp_external_storage_doc.bucket_name,
-					object_name=previous.dfp_external_storage_s3_key)
-		except:
+				frappe.db.after_rollback.add(
+					lambda: _remove_remote_object(new_storage, key, doc.file_name)
+				)
+				if not _remote_object_has_other_references(previous.dfp_external_storage, key, previous.name):
+					frappe.db.after_commit.add(
+						lambda: _remove_remote_object(old_storage, key, previous.file_name)
+					)
+		except Exception:
 			error_msg = _("Error putting file from one remote to another.")
 			frappe.log_error(f"{error_msg}: {doc.file_name}")
 			frappe.throw(error_msg)
 
-	# Clean cache when updating "File"
+	if bool(doc.dfp_external_storage) != bool(doc.dfp_external_storage_s3_key):
+		frappe.throw(_("External storage and S3 key must either both be set or both be empty."))
+
 	if doc.dfp_external_storage_s3_key:
 		cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{doc.name}"
 		frappe.cache().delete_value(cache_key)
+		doc.file_url = doc._remote_file_local_path_get()
 
 
 def hook_file_on_update(doc, method):
@@ -671,9 +725,12 @@ def hook_file_on_update(doc, method):
 	pass
 
 
-def hook_file_after_delete(doc, method):
-	"Called after a document is deleted"
-	doc.dfp_external_storage_delete_file()
+def hook_delete_file_data_content(doc, only_thumbnail=False):
+	if doc.dfp_is_s3_remote_file():
+		doc.dfp_external_storage_delete_file()
+		doc.delete_file_from_filesystem(only_thumbnail=True)
+		return
+	doc.delete_file_from_filesystem(only_thumbnail=only_thumbnail)
 
 
 class DFPExternalStorageFileRenderer:
@@ -683,11 +740,19 @@ class DFPExternalStorageFileRenderer:
 		self._regex = None
 
 	def _regexed_path(self):
-		self._regex = re.search(fr"{DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD}\/(.+)\/(.+\.\w+)$", self.path)
+		segment = re.escape(DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD)
+		self._regex = re.match(
+			fr"^/?{segment}/(?P<file_id>[^/]+)/(?P<file_name>[^/]+)$",
+			self.path,
+		)
 
 	def file_id_get(self):
 		if self.can_render():
-			return self._regex[1]
+			return self._regex.group("file_id")
+
+	def file_name_get(self):
+		if self.can_render():
+			return unquote(self._regex.group("file_name"))
 
 	def can_render(self):
 		if not self._regex:
@@ -696,9 +761,9 @@ class DFPExternalStorageFileRenderer:
 			return True
 
 	def render(self):
-		file_id = self._regex[1]
-		file_name = self._regex[2] if len(self._regex.regs) == 3 else ""
-		return file(name=file_id, file=file_name)
+		if not self.can_render():
+			raise frappe.PageDoesNotExistError()
+		return file(name=self.file_id_get(), file=self.file_name_get())
 
 
 def file(name:str, file:str):

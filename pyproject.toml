@@ -8,7 +8,7 @@ requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    "minio"
+    "minio==7.2.20"
 ]
 
 [build-system]

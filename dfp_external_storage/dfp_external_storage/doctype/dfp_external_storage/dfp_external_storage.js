@@ -30,7 +30,10 @@ frappe.ui.form.on('DFP External Storage', {
 
 		frappe.db.get_list(
 			'DFP External Storage by Folder',
-			{fields: ['name','folder']}
+			{
+				fields: ['name','folder'],
+				parent_doctype: 'DFP External Storage',
+			}
 		).then(data => {
 			if (data && data.length) {
 				let folders_name_not_assigned = data

@@ -1,0 +1,153 @@
+name: dfp-external-storage-v16-test
+
+x-test-image: &test-image
+  image: dfp-external-storage:v16.33.0-test
+  platform: linux/arm64
+  build:
+    context: ..
+    dockerfile: docker/Containerfile.test
+
+x-test-volumes: &test-volumes
+  - ./data/sites:/home/frappe/frappe-bench/sites
+  - ./data/logs:/home/frappe/frappe-bench/logs
+
+services:
+  object-storage:
+    image: ghcr.io/versity/versitygw:v1.7.0@sha256:06ab1492d9ff5b851dc9e3dfdd4221383ca135c1a42246853ed72e49618ff1d0
+    platform: linux/arm64
+    environment:
+      ROOT_ACCESS_KEY: ${TEST_S3_ACCESS_KEY}
+      ROOT_SECRET_KEY: ${TEST_S3_SECRET_KEY}
+      VGW_PORT: ":7070"
+      VGW_BACKEND: posix
+      VGW_BACKEND_ARG: /data
+    expose: ["7070"]
+    volumes:
+      - ./data/object-storage:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "7070"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [test]
+
+  permissions:
+    <<: *test-image
+    user: root
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        mkdir -p /home/frappe/frappe-bench/sites /home/frappe/frappe-bench/logs;
+        chown -R 1000:1000 /home/frappe/frappe-bench/sites /home/frappe/frappe-bench/logs
+    volumes: *test-volumes
+    networks: [test]
+
+  configurator:
+    <<: *test-image
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        test -f sites/common_site_config.json || printf '{}\n' > sites/common_site_config.json;
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host database;
+        bench set-config -gp db_port 3306;
+        bench set-config -g redis_cache redis://redis-cache:6379;
+        bench set-config -g redis_queue redis://redis-queue:6379;
+        bench set-config -g redis_socketio redis://redis-queue:6379;
+    volumes: *test-volumes
+    depends_on:
+      permissions:
+        condition: service_completed_successfully
+      database:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    networks: [test]
+
+  create-site:
+    <<: *test-image
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        bench new-site
+        --mariadb-user-host-login-scope='%'
+        --db-root-username=root
+        --db-root-password="$$TEST_DB_PASSWORD"
+        --admin-password="$$TEST_ADMIN_PASSWORD"
+        --install-app erpnext
+        --set-default "$$TEST_SITE_NAME";
+        bench --site "$$TEST_SITE_NAME" install-app dfp_external_storage;
+        bench --site "$$TEST_SITE_NAME" set-config allow_tests true
+    environment:
+      TEST_SITE_NAME: ${TEST_SITE_NAME}
+      TEST_DB_PASSWORD: ${TEST_DB_PASSWORD}
+      TEST_ADMIN_PASSWORD: ${TEST_ADMIN_PASSWORD}
+    volumes: *test-volumes
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks: [test]
+
+  tester:
+    <<: *test-image
+    restart: "no"
+    command: ["bench", "--site", "${TEST_SITE_NAME}", "run-tests", "--app", "dfp_external_storage"]
+    environment:
+      DFP_TEST_S3_ENDPOINT: object-storage:7070
+      DFP_TEST_S3_ACCESS_KEY: ${TEST_S3_ACCESS_KEY}
+      DFP_TEST_S3_SECRET_KEY: ${TEST_S3_SECRET_KEY}
+      DFP_TEST_S3_SECURE: "0"
+    volumes: *test-volumes
+    depends_on:
+      create-site:
+        condition: service_completed_successfully
+      object-storage:
+        condition: service_healthy
+    networks: [test]
+
+  database:
+    image: mariadb:11.8.9@sha256:2439dcd7d14010ecd1ff7a4e1c5abe8e208c34fe35290744deeeaac3569043c3
+    platform: linux/arm64
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MYSQL_ROOT_PASSWORD: ${TEST_DB_PASSWORD}
+    volumes:
+      - ./data/database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [test]
+
+  redis-cache:
+    image: redis:8.6.6-alpine@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    platform: linux/arm64
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [test]
+
+  redis-queue:
+    image: redis:8.6.6-alpine@sha256:75934ddb37bfaebe3b4082ba673cac39f66495244134f33dd0a502ce03cdcd36
+    platform: linux/arm64
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks: [test]
+
+networks:
+  test:
+    name: dfp-external-storage-v16-test
