@@ -5,6 +5,7 @@ import io
 import mimetypes
 import typing as t
 from datetime import timedelta
+from urllib.parse import urlsplit
 from werkzeug.wrappers import Response
 from werkzeug.wsgi import wrap_file
 from functools import cached_property
@@ -22,6 +23,10 @@ DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX = "external_storage_public_file:"
 # http://[host:port]/<file>/[File:name]/[File:file_name]
 # http://myhost.localhost:8000/file/c7baa5b2ff/my-image.png
 DFP_EXTERNAL_STORAGE_URL_SEGMENT_FOR_FILE_LOAD = "file"
+
+# Site config key holding the nginx `internal` location that fronts the S3 provider.
+# Unset (the default) means "there is no nginx to hand a download over to".
+DFP_X_ACCEL_REDIRECT_PREFIX_KEY = "dfp_x_accel_redirect_prefix"
 
 
 DFP_EXTERNAL_STORAGE_CONNECTION_FIELDS = [
@@ -700,6 +705,45 @@ class DFPExternalStorageFileRenderer:
 		return file(name=file_id, file=file_name)
 
 
+def dfp_x_accel_redirect_prefix() -> str:
+	"""The nginx `internal` location that proxies to the S3 provider, or "" if unusable.
+
+	Two things have to hold, because handing off a download we then do not perform
+	leaves the client with an empty 200:
+
+	- the site names the location in `dfp_x_accel_redirect_prefix`
+	  (site_config.json / common_site_config.json), which is also how a site opts in;
+	- the request carries `X-Use-X-Accel-Redirect`, which bench's nginx template
+	  injects and which Frappe itself trusts to mean "nginx is in front and honours
+	  the header" (see frappe.utils.response.send_private_file).
+
+	Either one missing just means the caller keeps serving the file the old way.
+	"""
+	prefix = str(frappe.conf.get(DFP_X_ACCEL_REDIRECT_PREFIX_KEY) or "").strip()
+	if not prefix:
+		return ""
+
+	request = getattr(frappe.local, "request", None)
+	if not request or not request.headers.get("X-Use-X-Accel-Redirect"):
+		return ""
+
+	return f"/{prefix.strip('/')}/"
+
+
+def dfp_x_accel_redirect_location(presigned_url:str, prefix:str) -> str:
+	"""Rewrite a presigned S3 URL as a path under the nginx internal location.
+
+	Scheme and host are dropped because nginx holds the upstream: the provider only
+	has to be reachable from nginx, not from the browser. The path keeps the
+	percent-encoding the S3 client signed, and the SigV4 query string rides along
+	untouched, which is what keeps the signature valid: nginx never decodes a query
+	string, and the path it re-encodes is what S3 recomputes the signature over.
+	"""
+	parsed = urlsplit(presigned_url)
+	location = f"{prefix}{parsed.path.lstrip('/')}"
+	return f"{location}?{parsed.query}" if parsed.query else location
+
+
 def file(name:str, file:str):
 	print(f"downloading name: {name}, file: {file}")
 
@@ -727,6 +771,21 @@ def file(name:str, file:str):
 		try:
 			presigned_url = doc.dfp_presigned_url_get()
 			if presigned_url:
+				x_accel_prefix = dfp_x_accel_redirect_prefix()
+				if x_accel_prefix:
+					# Let nginx do the transfer instead of redirecting the browser to the
+					# provider: the client stays on this origin and its TLS, the bucket is
+					# never exposed, Range and resume work, and this worker is free as soon
+					# as the header is out. The body must stay empty: nginx replaces it.
+					# If nginx is not there to take it, we fall through to the redirect.
+					response_values["headers"].append(("X-Accel-Redirect",
+						dfp_x_accel_redirect_location(presigned_url, x_accel_prefix)))
+					if doc.dfp_mime_type_guess_by_file_name:
+						response_values["mimetype"] = doc.dfp_mime_type_guess_by_file_name
+					response_values["status"] = 200
+					response_values["response"] = b""
+					frappe.logger().debug(f"X-Accel-Redirect handing off {name}/{file}")
+					return Response(**response_values)
 				frappe.flags.redirect_location = presigned_url
 				raise frappe.Redirect
 			# Do not stream file if cacheable or smaller than stream buffer chunks size
