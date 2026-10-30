@@ -569,10 +569,10 @@ class DFPExternalStorageFile(File):
 		except:
 			pass
 
-	def get_content(self) -> bytes:
+	def get_content(self, encodings=None) -> bytes | str:
 		self.dfp_file_url_is_s3_location_check_if_s3_data_is_not_defined()
 		if not self.dfp_is_s3_remote_file():
-			return super(DFPExternalStorageFile, self).get_content()
+			return super(DFPExternalStorageFile, self).get_content(encodings=encodings)
 		try:
 			if not self.is_downloadable():
 				raise Exception("File not available")
@@ -710,6 +710,7 @@ def file(name:str, file:str):
 	cache_key = f"{DFP_EXTERNAL_STORAGE_PUBLIC_CACHE_PREFIX}{name}"
 
 	response_values = frappe.cache().get_value(cache_key)
+	streamed_size = None
 	if not response_values:
 		try:
 			doc = frappe.get_doc("File", name)
@@ -735,6 +736,7 @@ def file(name:str, file:str):
 			else:
 				response_values["response"] = doc.dfp_external_storage_stream_file()
 				response_values["headers"].append(("Content-Length", doc.dfp_file_size))
+				streamed_size = doc.dfp_file_size
 		except frappe.Redirect:
 			raise
 		except:
@@ -755,7 +757,13 @@ def file(name:str, file:str):
 				expires_in_sec=doc.dfp_external_storage_doc.setting_cache_expiration_secs)
 
 	if "status" in response_values and response_values["status"] == 200:
-		return Response(**response_values)
+		response = Response(**response_values)
+		if streamed_size:
+			# Answer Range requests (206), so a client whose download of a big file was cut
+			# can pick up where it stopped instead of starting over.
+			response.make_conditional(frappe.local.request, accept_ranges=True,
+				complete_length=streamed_size)
+		return response
 
 	frappe.log_error("Page not found",f"unknown reason. response so far: {response_values}")
 	raise frappe.PageDoesNotExistError()
